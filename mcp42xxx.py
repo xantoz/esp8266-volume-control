@@ -90,11 +90,11 @@ class MCP42XXX:
                 self.spi.write(bytearray([0b00010000 | chan, value & 0xff])) # normal write
         self.cs.high()          # disable CS
 
-    def set(self, nr, value, channel=0b11):
+    def set(self, nr, value, channel=BOTH):
         """Send command to a single chip in daisy chain."""
 
         values = [None]*self.daisyCount
-        channels = [None]*self.daisyCount
+        channels = [0b00]*self.daisyCount
         try:
             values[nr] = value
             channels[nr] = channel
