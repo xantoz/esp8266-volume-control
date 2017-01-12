@@ -20,13 +20,15 @@ Goals/Progress log:
   * Possible solutions too little reistance:
     * Upgrade to MCP42100 for 100 kOhm max resistance?
     * Try to connect the pots in voltage divider mode somehow? (Wiper between audio signal and audio ground)
-    * Add static resistor/trim pot to bring digitally adjustable resistance
-      range inside useful area (Undesireable: adjustable range somewhat narrow)
+    * Add static resistor/trim pot to bring digitally adjustable
+      resistance range inside useful area (Undesireable: adjustable
+      range somewhat narrow) This might be needed, anyway, to ensure
+      current is limited as to not damage the wiper circuitry (see datasheet).
   * Possible solutions sparkling:
     * Bypass capacitors
     * Series capacitors? (block DC)
-    * Reference audio ground to system ground?
-    * Consider "proper" design incorporating some amps or whatever is needed, rather than this hack.
+    * -Consider "proper" design incorporating some amps or whatever is needed, rather than this hack.-
+    * Reference audio ground against 1.6 V ! (sparkling probably due to negative voltage, which MCP42XXX can't handle)
 * Make a circuit diagram for documentations sake
 * Write the application software (to make it work as an actual volume
   control, and not just three digital potentiometers I can control

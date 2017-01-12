@@ -36,7 +36,8 @@ class MCP42XXX:
     P0 = 0b01                   # Potentiometer 0
     P1 = 0b10                   # Potentiometer 1
     BOTH = 0b11                 # Both potentiometers
-
+    MAX_VALUE = 255
+    
     def __init__(self,
                  daisyCount=1,
                  baudrate=40000,

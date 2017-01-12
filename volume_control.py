@@ -11,24 +11,26 @@ from mcp42xxx import MCP42XXX
 # unique volume levels), but doing this is the next best thing to be
 # able to sanely adjust volume level without getting a proper
 # logarithmic digital potentiometer.
-logarithmic_mapping = [0] + [int(255*(math.log(i)/math.log(100)) + 1.0) for i in range(1, 100)]
+logarithmic_mapping = [0] + [int(MCP42XXX.MAX_VALUE*(math.log(i)/math.log(100)) + 1.0) for i in range(1, 100)]
 
 # Our 6 channel volume controller
 class VolumeController:
     def __init__(self):
-        self.mcp = MCP42XXX(daisyCount=3)
-        self.FL = 0
-        self.FR = 0
-        self.RL = 0
-        self.RR = 0
-        self.CEN = 0
-        self.SUB = 0
-
+        self.pot = MCP42XXX(daisyCount=3)
+        self.levels = {
+            'FL': 0,
+            'RR': 0,
+            'RL': 0,
+            'RR': 0,
+            'CEN': 0,
+            'SUB': 0
+        }
+        
     def volume_sweep(self):
         """Test routine that sweeps the volume of all potentiometers"""
         while True:
             for i in logarithmic_mapping:
-                self.mcp.set_chain([i, i, i])
+                self.pot.set_chain([i, i, i])
             for i in reversed(logarithmic_mapping):
-                self.mcp.set_chain([i, i, i])
-
+                self.pot.set_chain([i, i, i])
+        
