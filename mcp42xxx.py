@@ -1,5 +1,5 @@
 import machine
-import time
+import utime as time
 
 # ---MCP42XXX protocol---
 #
@@ -27,17 +27,17 @@ import time
 # ---PINOUT---
 # HSCLK = D5
 # HMISO = D6 (unused)
-# HMOSI = D7 
+# HMOSI = D7
 CS_PIN = 15                     # GPIO15 = D8
 SHDN_PIN = 4                    # GPIO4 = D2
 RS_PIN = 5                      # GPIO5 = D1
 
-class MCP42XXX:
+class MCP42XXX(object):
     P0 = 0b01                   # Potentiometer 0
     P1 = 0b10                   # Potentiometer 1
     BOTH = 0b11                 # Both potentiometers
     MAX_VALUE = 255
-    
+
     def __init__(self,
                  daisyCount=1,
                  baudrate=40000,
@@ -50,16 +50,17 @@ class MCP42XXX:
         delays.
 
         """
-        self.spi = machine.SPI(baudrate=baudrate, polarity=0, phase=0)
-        self.spi.init()
-        self.cs = machine.Pin(cs_pin, machine.Pin.OUT, 1) # active low
-        self.cs.high()
-        self.shdn = machine.Pin(shdn_pin, machine.Pin.OUT, 1) # active low
-        self.shdn.high()
-        self.rs = machine.Pin(rs_pin, machine.Pin.OUT, 1) # active low
-        self.rs.high()
+        # self.spi = machine.SPI(baudrate=baudrate, polarity=0, phase=0)
+        # self.spi.init()
+        self.spi = machine.SPI(1)
+        self.spi.init(baudrate=baudrate, polarity=0, phase=0)
+
+        self.cs   = machine.Pin(cs_pin,   mode=machine.Pin.OUT, value=1) # active low
+        self.shdn = machine.Pin(shdn_pin, mode=machine.Pin.OUT, value=1) # active low
+        self.rs   = machine.Pin(rs_pin,   mode=machine.Pin.OUT, value=1) # active low
+
         self.daisyCount = daisyCount
-        
+
     def set_chain(self, values, channels=None):
         """Set all units in daisy chain. First element in the lists
         values and channels corresponds to the first chip (sent last),
@@ -68,7 +69,7 @@ class MCP42XXX:
         Values in the list values should be between an integer between
         0 and 255, the string 'shdn' or None. Values in the list
         channels should be one of 0b01, 0b10, 0b11.
-        
+
         None in values == send NOP to corresponding chip. 'shdn' in
         values sends shdn command to corresponding chip (position) and
         potentiometer (corresponding value in channels).
@@ -79,7 +80,7 @@ class MCP42XXX:
         if (len(values) != self.daisyCount or
             len(channels) != self.daisyCount):
             raise Exception("Wrong length for values/channels parameter")
-        
+
         self.cs.low()           # enable CS
         for value, channel in zip(reversed(values), reversed(channels)):
             chan = (channel & 0b11)
