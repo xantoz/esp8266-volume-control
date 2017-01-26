@@ -12,7 +12,7 @@ class Window : public QWidget
     Q_OBJECT
 
 public:
-    Window(const char *host, unsigned port);
+    Window(const QString &host, quint16 port);
     virtual ~Window();
 
 public slots:
@@ -21,7 +21,7 @@ public slots:
     void sliderValueUpdate(int value);
 
 private:
-    bool serverConnect(const char *host, unsigned port);
+    bool serverConnect(const QString &host, quint16 port);
     bool serverDisconnect();
     
     // VolumeSlider *frontSlider;

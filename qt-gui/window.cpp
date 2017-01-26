@@ -18,10 +18,8 @@ static QSlider *sliderSettings(QSlider *slider)
     return slider;
 }
 
-Window::Window(const char *host, unsigned port)
+Window::Window(const QString &host, quint16 port)
 {
-    if (!this->serverConnect(host, port))
-        this->fatalError(tr("Could not connect to volume control server (host: %1, port: %2)").arg(host).arg(port));
 
     frontSlider  = sliderSettings(new QSlider(Qt::Vertical, this));
     censubSlider = sliderSettings(new QSlider(Qt::Vertical, this));
@@ -30,13 +28,17 @@ Window::Window(const char *host, unsigned port)
     connect(frontSlider,  &QSlider::valueChanged, this, &Window::sliderValueUpdate);
     connect(censubSlider, &QSlider::valueChanged, this, &Window::sliderValueUpdate);
     connect(rearSlider,   &QSlider::valueChanged, this, &Window::sliderValueUpdate);
-    
-    QHBoxLayout *layout = new QHBoxLayout();
+
+    QHBoxLayout *layout = new QHBoxLayout(this);
     layout->addWidget(frontSlider);
     layout->addWidget(censubSlider);
     layout->addWidget(rearSlider);
-    
+
     this->setLayout(layout);
+
+    socket = new QTcpSocket(this);
+    if (!this->serverConnect(host, port))
+        this->fatalError(tr("Could not connect to volume control server (host: %1, port: %2)").arg(host).arg(port));
 }
 
 Window::~Window()
@@ -54,7 +56,7 @@ void Window::error(const QString& _details)
         _details,
         QMessageBox::Ok,
         this);
-    
+
     mbox.exec();
 }
 
@@ -67,7 +69,7 @@ void Window::fatalError(const QString& _details)
            "Please press OK button to quit.").arg(qApp->applicationName()),
         QMessageBox::Ok,
         this);
-    
+
     mbox.setDetailedText(_details);
     mbox.exec();
 
@@ -83,7 +85,7 @@ void Window::sliderValueUpdate(int value)
     char data[128];
 
     // TODO: support changing L/R channels independently (requires making custom sliders too)
-    
+
     if (sender() == frontSlider)
     {
         chan = "F";
@@ -99,7 +101,7 @@ void Window::sliderValueUpdate(int value)
         chan = "R";
         printf("R %d\n", value);
     }
-    else 
+    else
     {
         // This shouldn't happen
         printf("U %d\n", value);
@@ -107,10 +109,19 @@ void Window::sliderValueUpdate(int value)
         return;
     }
 
-    // TODO: send command over socket here
+    snprintf(data, sizeof(data), "set %s %d\n", chan, value);
 
+    socket->write(data);
     socket->flush();
 
+    qint64 lineLength = socket->readLine(data, sizeof(data));
+    if (lineLength == -1)
+    {
+        error("Problem reading status message from server");
+        return;
+    }
+
+    printf("Got status string: %s", data);
 
     // TODO: use the read status string here to update state of sliders
 

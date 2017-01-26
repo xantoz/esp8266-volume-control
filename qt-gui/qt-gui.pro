@@ -6,6 +6,7 @@ TEMPLATE = app
 TARGET = esp8266-vc-qt-gui
 INCLUDEPATH += .
 
+CONFIG += debug_and_release
 CONFIG += c++11
 
 QT += core
