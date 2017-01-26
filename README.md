@@ -19,7 +19,7 @@ Goals/Progress log:
     plain ASCII, out of laziness. Perhaps replace with a binary
     protocol in the future.)
 
-* Make client software - in progres
+* Make client software - in progress
   - Currently writing a Qt GUI for desktop, could probably be made to
     work on phones too.
   - Need to make a cmdline tool for scripting, integration into WM's
