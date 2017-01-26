@@ -158,7 +158,7 @@ class VolumeController(object):
     ## PRIVATE ##
 
     def _client(self, cl, addr):
-        """'Process' for handling client."""
+        """'Process for handling client."""
         # TODO: Try to allow several clients connected at once using
         #       some fancy slicing or something like that (implement
         #       threads using timers & generators or something, yay!)? coroutines?
@@ -175,9 +175,13 @@ class VolumeController(object):
         while True:
             line = cl.readline().decode('ascii')
             print("{}: got cmd '{}'".format(self.__qualname__, line.rstrip())) # DEBUG (remove later)'
-            if not line or line[:6] == 'byebye' or line == '\r\n' or line == '\n':
+
+            if not line or line == '\r\n' or line == '\n':
+                break
+            if line[:6] == 'byebye':
                 send_string("CYA")
                 break
+            
             try:
                 self._process_cmd(line)
             except TypeError as e:
