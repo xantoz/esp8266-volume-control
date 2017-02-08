@@ -7,6 +7,11 @@
 #include <QMessageBox>
 #include <QHBoxLayout>
 
+#include <QLabel>
+
+// Set to non-zero when debugging GUI without actually connecting to server
+#define DEBUG_NO_CONNECT 0
+
 static QSlider *sliderSettings(QSlider *slider)
 {
     slider->setRange(0, 99);
@@ -25,10 +30,6 @@ Window::Window(const QString &host, quint16 port)
     censubSlider = sliderSettings(new QSlider(Qt::Vertical, this));
     rearSlider   = sliderSettings(new QSlider(Qt::Vertical, this));
 
-    connect(frontSlider,  &QSlider::valueChanged, this, &Window::sliderValueUpdate);
-    connect(censubSlider, &QSlider::valueChanged, this, &Window::sliderValueUpdate);
-    connect(rearSlider,   &QSlider::valueChanged, this, &Window::sliderValueUpdate);
-
     QHBoxLayout *layout = new QHBoxLayout(this);
     layout->addWidget(frontSlider);
     layout->addWidget(censubSlider);
@@ -36,9 +37,24 @@ Window::Window(const QString &host, quint16 port)
 
     this->setLayout(layout);
 
-    socket = new QTcpSocket(this);
-    if (!this->serverConnect(host, port))
-        this->fatalError(tr("Could not connect to volume control server (host: %1, port: %2)").arg(host).arg(port));
+    if (DEBUG_NO_CONNECT)
+    {
+        socket = NULL;
+    }
+    else
+    {
+        socket = new QTcpSocket(this);
+        if (!this->serverConnect(host, port))
+            this->fatalError(tr("Could not connect to volume control server (host: %1, port: %2)").arg(host).arg(port));
+
+        // Maybe not actually needed, since in our case this constructor runs before the event loop
+        // is started so the sliders won't be triggering any events.
+        socket->waitForConnected();
+    }
+
+    connect(frontSlider,  &QSlider::valueChanged, this, &Window::sliderValueUpdate);
+    connect(censubSlider, &QSlider::valueChanged, this, &Window::sliderValueUpdate);
+    connect(rearSlider,   &QSlider::valueChanged, this, &Window::sliderValueUpdate);
 }
 
 Window::~Window()
@@ -111,20 +127,26 @@ void Window::sliderValueUpdate(int value)
 
     snprintf(data, sizeof(data), "set %s %d\n", chan, value);
 
-    socket->write(data);
-    socket->flush();
-
-    qint64 lineLength = socket->readLine(data, sizeof(data));
-    if (lineLength == -1)
+    if (NULL != socket)
     {
-        error("Problem reading status message from server");
-        return;
+        socket->write(data);
+        socket->waitForBytesWritten();
+
+        // TODO: move reading the socket to a slot instead?
+        socket->waitForReadyRead();
+        qint64 lineLength = socket->readLine(data, sizeof(data));
+        if (lineLength == -1)
+        {
+            error("Problem reading status message from server");
+            // TODO: set disconnected mode here (disabled sliders & all)
+            return;
+        }
+
+        printf("Got status string: %s", data);
+
+
+        // TODO: use the read status string here to update state of sliders
     }
-
-    printf("Got status string: %s", data);
-
-    // TODO: use the read status string here to update state of sliders
-
 }
 
 bool Window::serverConnect(const QString &host, quint16 port)
