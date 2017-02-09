@@ -29,9 +29,8 @@ class VolumeController(object):
     R = 1
     LR = 2
     # convenience synonyms to use when adressing the SUB/CEN channel (channel 1 == second pot)
-    # TODO: confirm wiring for these aliases
-    SUB = L
-    CEN = R
+    SUB = R
+    CEN = L
 
     def __init__(self):
         self.pot = MCP42XXX(daisyCount=self.NUMPOTS)
@@ -63,7 +62,7 @@ class VolumeController(object):
         global g_logarithmic_mapping
 
         # TODO: confirm wiring (currently assumed P0 = L , P1 = R)
-        for chan, values in zip([MCP42XXX.P0, MCP42XXX.P1], zip(*self.levels)):
+        for chan, values in zip([MCP42XXX.P1, MCP42XXX.P0], zip(*self.levels)):
             self.pot.set_chain([None if x == None else g_logarithmic_mapping[x] for x in values],
                                [chan]*len(values))
 
@@ -174,7 +173,7 @@ class VolumeController(object):
 
         while True:
             line = cl.readline().decode('ascii')
-            print("{}: got cmd '{}'".format(self.__qualname__, line.rstrip())) # DEBUG (remove later)'
+            print("{}: got cmd '{}'".format(self.__qualname__, line.rstrip())) # DEBUG (remove later)
 
             if not line or line == '\r\n' or line == '\n':
                 break
@@ -195,6 +194,7 @@ class VolumeController(object):
                 sys.print_exception(e)
             else:
                 send_string("OK " + self.get_status_string())
+        print("{}: client '{}' disconnected".format(self.__qualname__, addr)) # DEBUG (remove later)
 
     _chan_table = {
         'FL': (0, L), 'FR': (0, R), 'F': (0, LR),
