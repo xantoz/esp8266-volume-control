@@ -29,8 +29,8 @@ class VolumeController(object):
     R = 1
     LR = 2
     # convenience synonyms to use when adressing the SUB/CEN channel (channel 1 == second pot)
-    SUB = R
-    CEN = L
+    SUB = L
+    CEN = R
 
     def __init__(self):
         self.pot = MCP42XXX(daisyCount=self.NUMPOTS)
@@ -63,7 +63,7 @@ class VolumeController(object):
         global g_logarithmic_mapping
 
         # TODO: restructure self.levels and self.mutes in a way that requires less zipping here...
-        for chan, values in zip([MCP42XXX.P1, MCP42XXX.P0], zip(zip(*self.levels), zip(*self.mutes))):
+        for chan, values in zip([MCP42XXX.P0, MCP42XXX.P1], zip(zip(*self.levels), zip(*self.mutes))):
             # Since we always send everything we neatly avoid the glitch where a channel is unshdn:ed by even a regular NOP
             self.pot.set_chain(['shdn' if mute else g_logarithmic_mapping[level] for level, mute in zip(*values)],
                                [chan]*self.NUMPOTS)
