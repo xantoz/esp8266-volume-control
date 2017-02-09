@@ -45,13 +45,13 @@ LRVolumeSlider::LRVolumeSlider(const QString &title,
     lockBox = new QCheckBox(tr("Lock sliders"), this);
     lockBox->setChecked(true); // Locked by default
 
-    layout->addWidget(lSlider,  0, 0, Qt::AlignHCenter);
-    layout->addWidget(rSlider,  0, 1, Qt::AlignHCenter);
-    layout->addWidget(lMuteBox, 1, 0, Qt::AlignHCenter);
-    layout->addWidget(rMuteBox, 1, 1, Qt::AlignHCenter);
-    layout->addWidget(lLabel,   2, 0, Qt::AlignHCenter);
-    layout->addWidget(rLabel,   2, 1, Qt::AlignHCenter);
-    layout->addWidget(lockBox,  4, 0, 1, 2, Qt::AlignHCenter); // Lockbox spanning two columns
+    layout->addWidget(lSlider,  1, 0, Qt::AlignHCenter);
+    layout->addWidget(rSlider,  1, 1, Qt::AlignHCenter);
+    layout->addWidget(lMuteBox, 2, 0, Qt::AlignHCenter);
+    layout->addWidget(rMuteBox, 2, 1, Qt::AlignHCenter);
+    layout->addWidget(lLabel,   0, 0, Qt::AlignHCenter);
+    layout->addWidget(rLabel,   0, 1, Qt::AlignHCenter);
+    layout->addWidget(lockBox,  3, 0, 1, 2, Qt::AlignHCenter); // Lockbox spanning two columns
     this->setLayout(layout);
 
     // TODO: somehow macro away the redundancy here using a generic function?
