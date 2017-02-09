@@ -45,24 +45,18 @@ Window::Window(const QString &host, quint16 port)
 
     connect(frontSlider,  &LRVolumeSlider::lValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "FL", newValue); });
     connect(frontSlider,  &LRVolumeSlider::rValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "FR", newValue); });
-    // TODO: right now we just use the mute checkboxes like a stupid button that sends a
-    // mutechan command when clicked. What we need is better mute handling server-side, so that
-    // we can send "mutechan <chan> 0/1" to mute/unmute a channel. this will also help to
-    // remember (server-side) the volume to reset to when unmuting (currently muting == setting
-    // volume level to none, which is a bit stupid. we need a mute state per channel independent
-    // of volume)
-    connect(frontSlider,  &LRVolumeSlider::lMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "FL"); });
-    connect(frontSlider,  &LRVolumeSlider::rMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "FR"); });
+    connect(frontSlider,  &LRVolumeSlider::lMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "FL", (int)state); });
+    connect(frontSlider,  &LRVolumeSlider::rMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "FR", (int)state); });
 
     connect(censubSlider, &LRVolumeSlider::lValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "CEN", newValue); });
     connect(censubSlider, &LRVolumeSlider::rValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "SUB", newValue); });
-    connect(censubSlider, &LRVolumeSlider::lMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "CEN"); });
-    connect(censubSlider, &LRVolumeSlider::rMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "SUB"); });
+    connect(censubSlider, &LRVolumeSlider::lMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "CEN", (int)state); });
+    connect(censubSlider, &LRVolumeSlider::rMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "SUB", (int)state); });
 
     connect(rearSlider,   &LRVolumeSlider::lValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "RL", newValue); });
     connect(rearSlider,   &LRVolumeSlider::rValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "RR", newValue); });
-    connect(rearSlider,   &LRVolumeSlider::lMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "RR"); });
-    connect(rearSlider,   &LRVolumeSlider::rMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "RL"); });
+    connect(rearSlider,   &LRVolumeSlider::lMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "RR", (int)state); });
+    connect(rearSlider,   &LRVolumeSlider::rMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "RL", (int)state); });
 }
 
 Window::~Window()

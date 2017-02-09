@@ -20,7 +20,7 @@ g_logarithmic_mapping = [0] + [int(MCP42XXX.MAX_VALUE*(math.log(i)/math.log(100)
 # Our 6 channel volume controller
 class VolumeController(object):
     NUMCHANNELS = 6
-    NUMPOTS = NUMCHANNELS // 2
+    NUMPOTS = NUMCHANNELS // 2  # MCP42XXX has two channels
 
     MAX_LEVEL = 99
     MIN_LEVEL = 0
@@ -35,11 +35,12 @@ class VolumeController(object):
     def __init__(self):
         self.pot = MCP42XXX(daisyCount=self.NUMPOTS)
         self.levels = [[0,0] for _ in range(self.NUMPOTS)] # TODO: initialize from value stored to flash (re-store periodically, or on request)
+        self.mutes  = [[False,False] for _ in range(self.NUMPOTS)]
         self.push_levels()
         self.mute_state = False
 
     def reset(self):
-        """Resets the volume controller. Do not confuse with the reset pin on
+        """Resets the volume controller. Do not confuse with the RESET pin on
            MCP42XXX (which isn't used by this method).
 
         """
@@ -61,10 +62,11 @@ class VolumeController(object):
         """Sets the actual value of the pots to correspond to self.levels"""
         global g_logarithmic_mapping
 
-        # TODO: confirm wiring (currently assumed P0 = L , P1 = R)
-        for chan, values in zip([MCP42XXX.P1, MCP42XXX.P0], zip(*self.levels)):
-            self.pot.set_chain([None if x == None else g_logarithmic_mapping[x] for x in values],
-                               [chan]*len(values))
+        # TODO: restructure self.levels and self.mutes in a way that requires less zipping here...
+        for chan, values in zip([MCP42XXX.P1, MCP42XXX.P0], zip(zip(*self.levels), zip(*self.mutes))):
+            # Since we always send everything we neatly avoid the glitch where a channel is unshdn:ed by even a regular NOP
+            self.pot.set_chain(['shdn' if mute else g_logarithmic_mapping[level] for level, mute in zip(*values)],
+                               [chan]*self.NUMPOTS)
 
     def set_volume(self, schannel, lr, level):
         """Set the volume of a particular channel, possibly setting both
@@ -91,7 +93,32 @@ class VolumeController(object):
         else:
             self.levels[schannel][lr] = level
 
+        # TODO: only push_levels if something actually changed
         self.push_levels()
+
+    def set_mute(self, schannel, lr, state):
+        """Set mute state of a particular channel.
+
+           schannel is a number from 0 to NUMPOTS selecting what
+           stereo channel to affect. lr is one of the constants L, R,
+           or LR (SUB, CEN are simply convenient synonyms). state is a
+           boolean True for mute, False for not mute.
+        """
+        state = bool(state)
+        if schannel < 0 or schannel > self.NUMPOTS:
+            raise ValueError("schannel out of bounds")
+        if lr not in (self.L, self.R, self.LR):
+            raise ValueError("lr out of bounds")
+
+        if lr == self.LR:
+            self.mutes[schannel][self.L] = state
+            self.mutes[schannel][self.R] = state
+        else:
+            self.mutes[schannel][lr] = state
+
+        # TODO: only push_levels if something actually changed
+        self.push_levels()
+
 
     def get_volume(self, schannel, lr):
         """Same parameters as set_volume, except it gets the volume instead.
@@ -101,8 +128,6 @@ class VolumeController(object):
 
         """
         if schannel < 0 or schannel > self.NUMPOTS:
-            # perhaps a bit unneccesary as array accesses are always
-            # bounds-checked in python, but I like a custom message
             raise ValueError("schannel out of bounds")
         if lr not in (self.L, self.R, self.LR):
             raise ValueError("lr out of bounds")
@@ -113,18 +138,21 @@ class VolumeController(object):
             return self.levels[schannel][lr]
 
     def mute(self):
-        self.pot.shdn_all()
+        """Set global mute state"""
+        self.pot.shdn_all()     # Implemented by pulling SHDN pin low
         self.mute_state = True
 
     def unmute(self):
+        """Unset global mute state"""
         self.pot.unshdn_all()
         self.mute_state = False
 
     def get_status_string(self):
-        """Returns a string describing the state of the volume controller."""
-        # TODO: Switch over to symbolic mapped names instead? (LR, RR, CEN, SUB etc.)
-        return "; ".join(["{}: ({},{})".format(i, schan[self.L], schan[self.R])
-                          for i, schan in enumerate(self.levels)]) \
+        """Returns a string describing the state of the volume controller.
+           Format: <pot nr>: (<left level>, <right level>, <left mute state>, <right mute state>); ...; Mute: <global mute state>"""
+        # TODO: Switch over to symbolic mapped names instead? (FL, FR, RR, RL, CEN, SUB etc.)
+        return "; ".join(["{}: ({},{},{},{})".format(i, schan[self.L], schan[self.R], int(smute[self.L]), int(smute[self.R]))
+                          for i, (schan, smute) in enumerate(zip(self.levels, self.mutes))]) \
                     + "; Mute: {}".format(int(self.mute_state))
 
     def server_loop(self, port, bindaddr="0.0.0.0"):
@@ -157,7 +185,7 @@ class VolumeController(object):
     ## PRIVATE ##
 
     def _client(self, cl, addr):
-        """'Process for handling client."""
+        """Process for handling client."""
         # TODO: Try to allow several clients connected at once using
         #       some fancy slicing or something like that (implement
         #       threads using timers & generators or something, yay!)? coroutines?
@@ -194,7 +222,7 @@ class VolumeController(object):
                 sys.print_exception(e)
             else:
                 send_string("OK " + self.get_status_string())
-        print("{}: client '{}' disconnected".format(self.__qualname__, addr)) # DEBUG (remove later)
+        print("{}: client {} disconnected".format(self.__qualname__, addr)) # DEBUG (remove later)
 
     _chan_table = {
         'FL': (0, L), 'FR': (0, R), 'F': (0, LR),
@@ -211,12 +239,16 @@ class VolumeController(object):
             raise ValueError("bad channel")
 
     def _cmd_set(self, chan, level):
+        """Command to set a channel.
+           Usage: set <chan> <0-99>"""
         schan, lr = self._get_chan(chan)
         self.set_volume(schan, lr, int(level))
 
-    def _cmd_mutechan(self, chan):
+    def _cmd_mutechan(self, chan, state):
+        """Command to mute/unmute a single channel
+           Usage: mute <chan> <0/1>"""
         schan, lr = self._get_chan(chan)
-        self.set_volume(schan, lr, None)
+        self.set_mute(schan, lr, bool(int(state)))
 
     def _cmd_inc(self, chan):
         schan, lr = self._get_chan(chan)
@@ -230,6 +262,15 @@ class VolumeController(object):
         if level > self.MIN_LEVEL:
             self.set_volume(schan, lr, level - 1)
 
+    def _cmd_mute(self, state):
+        """Command to mute/unmute all channels.
+           Usage: mute <0/1>"""
+        state = bool(int(state))
+        if state == False:
+            self.unmute()
+        else:
+            self.mute()
+
     def _cmd_status(self):
         """Basically a nop, since status is always sent to the client after
            any successful command.
@@ -241,8 +282,7 @@ class VolumeController(object):
                        'inc': _cmd_inc,
                        'dec': _cmd_dec,
                        'status': _cmd_status,
-                       'mute': mute,
-                       'unmute': unmute,
+                       'mute': _cmd_mute,
                        'mutechan': _cmd_mutechan,
                        'reset': reset}
 
