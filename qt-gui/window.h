@@ -3,9 +3,7 @@
 #include <QWidget>
 #include <QTcpSocket>
 
-/* TODO: replace sliders with own subclass of groupbox containing a nifty 2-channel slider of
- * some sort */
-#include <QSlider>
+#include "VolumeSlider.h"
 
 class Window : public QWidget
 {
@@ -18,19 +16,25 @@ public:
 public slots:
     void error(const QString& _details);
     void fatalError(const QString& _details);
-    void sliderValueUpdate(int value);
 
 private:
     bool serverConnect(const QString &host, quint16 port);
     bool serverDisconnect();
-    
-    // VolumeSlider *frontSlider;
-    // VolumeSlider *censubSlider;
-    // VolumeSlider *rearSlider;
 
-    QSlider *frontSlider;
-    QSlider *censubSlider;
-    QSlider *rearSlider;
+
+    /** Helper method to construct and send a command without any parameters */
+    void sendMsgHelper(const char *cmd);
+    /** Helper method to construct and send a command with a channel parameter */
+    void sendMsgHelper(const char *cmd, const char *chan);
+    /** Helper method to construct and send a command with a channel and level parameter */
+    void sendMsgHelper(const char *cmd, const char *chan, int level);
+
+    /** Send data to server */
+    void sendMsg(const char *data);
+
+    LRVolumeSlider *frontSlider;
+    LRVolumeSlider *censubSlider;
+    LRVolumeSlider *rearSlider;
 
     QTcpSocket *socket;
 };
