@@ -77,9 +77,9 @@ LRVolumeSlider::LRVolumeSlider(const QString &title,
     connect(lSlider, &QSlider::valueChanged, this, &LRVolumeSlider::lValueChanged);
     connect(rSlider, &QSlider::valueChanged, this, &LRVolumeSlider::rValueChanged);
     connect(lMuteBox, &QCheckBox::stateChanged, [this](int state) {
-            emit rMuteStateChanged(state != Qt::Unchecked);
+            emit lMuteStateChanged(state != Qt::Unchecked);
             });
     connect(rMuteBox, &QCheckBox::stateChanged, [this](int state) {
-            emit lMuteStateChanged(state != Qt::Unchecked);
+            emit rMuteStateChanged(state != Qt::Unchecked);
             });
 }
