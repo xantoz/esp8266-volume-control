@@ -40,7 +40,7 @@ class MCP42XXX(object):
 
     def __init__(self,
                  daisyCount=1,
-                 baudrate=40000,
+                 baudrate=10000,
                  cs_pin=CS_PIN,
                  shdn_pin=SHDN_PIN,
                  rs_pin=RS_PIN):
@@ -90,6 +90,8 @@ class MCP42XXX(object):
                 self.spi.write(bytearray([0b00110000, 0x00])) # send NOP
             else:
                 self.spi.write(bytearray([0b00010000 | chan, value & 0xff])) # normal write
+        # Need to wait for HSPI peripheral to finish before disableing CS
+        time.sleep_ms(2)        # TODO: make this depend on baudrate (currently set for 10000 baud empirically using logic analyzer)
         self.cs.high()          # disable CS
 
     def set(self, nr, value, channel=BOTH):
