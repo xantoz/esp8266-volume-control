@@ -1,6 +1,7 @@
 import sys
 import math
 import usocket as socket
+import errno
 from mcp42xxx import MCP42XXX
 
 # TODO: maybe move networking/protocol portion outside VolumeController class to its own class or module?
@@ -177,6 +178,11 @@ class VolumeController(object):
                 try:
                     print('{}: client connected from {}'.format(self.__qualname__, addr))
                     self._client(cl, addr)
+                except OSError as e:
+                    print("ERROR: Got", e)
+                    sys.print_exception(e)
+                    # TODO: Do we need to handle errno.ECONNRESET specially?
+                # TODO: seems like we might need to handle NameError? (or is my code just buggy?)
                 finally:
                     cl.close()
         finally:
