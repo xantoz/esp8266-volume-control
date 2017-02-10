@@ -2,6 +2,7 @@
 
 #include <Qt>
 #include <QGridLayout>
+#include <QVBoxLayout>
 #include <QLabel>
 
 // use later if using a stackedlayout with simple slider and double slider switcheable?
@@ -78,8 +79,28 @@ LRVolumeSlider::LRVolumeSlider(const QString &title,
     connect(rSlider, &QSlider::valueChanged, this, &LRVolumeSlider::rValueChanged);
     connect(lMuteBox, &QCheckBox::stateChanged, [this](int state) {
             emit lMuteStateChanged(state != Qt::Unchecked);
-            });
+        });
     connect(rMuteBox, &QCheckBox::stateChanged, [this](int state) {
             emit rMuteStateChanged(state != Qt::Unchecked);
-            });
+        });
+}
+
+VolumeSlider::VolumeSlider(const QString &title, QWidget *parent) :
+    QGroupBox(title, parent)
+{
+    QVBoxLayout *layout = new QVBoxLayout(this);
+
+    slider = sliderSettings(new QSlider(this));
+    layout->addWidget(slider, Qt::AlignHCenter);
+
+    muteBox = new QCheckBox(tr("Mute"), this);
+    layout->addWidget(muteBox, Qt::AlignHCenter);
+
+    layout->setAlignment(Qt::AlignHCenter);
+    this->setLayout(layout);
+
+    connect(slider, &QSlider::valueChanged, this, &VolumeSlider::valueChanged);
+    connect(muteBox, &QCheckBox::stateChanged, [this](int state) {
+            emit muteStateChanged(state != Qt::Unchecked);
+        });
 }

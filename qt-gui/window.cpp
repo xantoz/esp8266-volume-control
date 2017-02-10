@@ -16,11 +16,13 @@ static const unsigned TIMEOUT = 10000;
 Window::Window(const QString &host, quint16 port)
 {
 
+    masterSlider = new VolumeSlider("Master", this);
     frontSlider  = new LRVolumeSlider("Front", this);
     censubSlider = new LRVolumeSlider("Center/Sub", this, "CEN", "SUB");
     rearSlider   = new LRVolumeSlider("Rear", this);
 
     QHBoxLayout *layout = new QHBoxLayout(this);
+    layout->addWidget(masterSlider);
     layout->addWidget(frontSlider);
     layout->addWidget(censubSlider);
     layout->addWidget(rearSlider);
@@ -42,6 +44,22 @@ Window::Window(const QString &host, quint16 port)
         if (!socket->waitForConnected(TIMEOUT))
             this->fatalError(tr("Timed out connecting to server"));
     }
+
+    // TODO: scale slider values by masterslider
+    // TODO: seems that connecting signal to signal like this causes the signal to be sent using
+    //       the value of master slider... Need to create special slot for all lValueChanged/rValueChanged 
+    // TODO: alternatively change the values of the other sliders so that we can see the effect
+    //       the master slider has on the individual volumes? (going to be tricky to get
+    //       feedback the other way around)
+    /* *Currently only mute button on master slider is functional*
+    connect(masterSlider, &VolumeSlider::valueChanged,     frontSlider,  &LRVolumeSlider::lValueChanged);
+    connect(masterSlider, &VolumeSlider::valueChanged,     frontSlider,  &LRVolumeSlider::rValueChanged);
+    connect(masterSlider, &VolumeSlider::valueChanged,     censubSlider, &LRVolumeSlider::lValueChanged);
+    connect(masterSlider, &VolumeSlider::valueChanged,     censubSlider, &LRVolumeSlider::rValueChanged);
+    connect(masterSlider, &VolumeSlider::valueChanged,     rearSlider,   &LRVolumeSlider::lValueChanged);
+    connect(masterSlider, &VolumeSlider::valueChanged,     rearSlider,   &LRVolumeSlider::rValueChanged);
+    */
+    connect(masterSlider, &VolumeSlider::muteStateChanged, [this](bool state) { this->sendMsgHelper("mute", (int)state); });
 
     connect(frontSlider,  &LRVolumeSlider::lValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "FL", newValue); });
     connect(frontSlider,  &LRVolumeSlider::rValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "FR", newValue); });
@@ -131,10 +149,10 @@ void Window::sendMsgHelper(const char *cmd)
     this->sendMsg(data);
 }
 
-void Window::sendMsgHelper(const char *cmd, const char *chan)
+void Window::sendMsgHelper(const char *cmd, int level)
 {
     char data[CMD_BUFFER_SIZE];
-    snprintf(data, sizeof(data), "%s %s\n", cmd, chan);
+    snprintf(data, sizeof(data), "%s %d\n", cmd, level);
     this->sendMsg(data);
 }
 

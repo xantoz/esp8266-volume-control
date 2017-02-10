@@ -31,6 +31,9 @@ public:
                    const QString &rLabelString);
 
 signals:
+    // TODO: replace lValueChanged/rValueChanged etc. with single signal that instead sends two
+    // values (makes it easier to transition to stackedlayout version where we can switch
+    // between dual/single sliders)
     void lValueChanged(int newValue);
     void rValueChanged(int newValue);
     void rMuteStateChanged(bool newValue);
@@ -45,7 +48,7 @@ private:
 };
 
 
-/*
+
 class VolumeSlider : public QGroupBox
 {
     Q_OBJECT
@@ -53,8 +56,11 @@ class VolumeSlider : public QGroupBox
 public:
     VolumeSlider(const QString &title, QWidget *parent);
 
+signals:
+    void valueChanged(int newValue);
+    void muteStateChanged(bool state);
+
 private:
     QSlider *slider;
     QCheckBox *muteBox;
 };
-*/
