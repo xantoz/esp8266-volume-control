@@ -7,6 +7,9 @@ class LRVolumeSlider : public QGroupBox
     Q_OBJECT
 
 public:
+    static const int maxVal = 99; //!< max value of volume slider
+    static const int minVal = 0;  //!< min value of volume slider
+
     /**
      * \brief Construct an LRVolumeSlider with default names for the
      *        channels.
@@ -30,14 +33,23 @@ public:
                    const QString &lLabelString,
                    const QString &rLabelString);
 
+    /**
+     * \brief get value of sliders
+     *
+     * \param [out] lValue   store value of left slider here
+     * \param [out] rValue   store value of right slider here
+     */
+    void value(int &lValue, int &rValue) const;
+
 signals:
-    // TODO: replace lValueChanged/rValueChanged etc. with single signal that instead sends two
-    // values (makes it easier to transition to stackedlayout version where we can switch
-    // between dual/single sliders)
-    void lValueChanged(int newValue);
-    void rValueChanged(int newValue);
-    void rMuteStateChanged(bool newValue);
-    void lMuteStateChanged(bool newValue);
+    void valueChanged(int lValue, int rValue);
+    void muteStateChanged(bool lState, bool rState);
+
+public slots:
+    // These two slots are a bit of an ugly hack that can be used to force the valueChanged
+    // signal to be emitted, even though the actual value hasn't changed
+    void emitValueChanged();
+    void emitMuteStateChanged();
 
 private:
     QSlider *lSlider;
@@ -47,14 +59,17 @@ private:
     QCheckBox *lockBox;
 };
 
-
-
 class VolumeSlider : public QGroupBox
 {
     Q_OBJECT
 
 public:
+    static const int maxVal = LRVolumeSlider::maxVal; //!< max value of volume slider
+    static const int minVal = LRVolumeSlider::minVal; //!< min value of volume slider
+
     VolumeSlider(const QString &title, QWidget *parent);
+
+    int value() const;
 
 signals:
     void valueChanged(int newValue);

@@ -21,7 +21,6 @@ private:
     bool serverConnect(const QString &host, quint16 port);
     bool serverDisconnect();
 
-
     /** Helper method to construct and send a command without any parameters */
     void sendMsgHelper(const char *cmd);
     /** Helper method to construct and send a command with an int parameter */

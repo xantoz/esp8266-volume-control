@@ -6,12 +6,12 @@
 #include <QLabel>
 
 // use later if using a stackedlayout with simple slider and double slider switcheable?
-//#include <QSignalBlocker>
+#include <QSignalBlocker>
 
 /* Function to set our sliders up, so that we don't have to repeat ourselves. */
 static QSlider *sliderSettings(QSlider *slider)
 {
-    slider->setRange(0, 99);
+    slider->setRange(VolumeSlider::minVal, VolumeSlider::maxVal);
     slider->setFocusPolicy(Qt::StrongFocus);
     slider->setTickPosition(QSlider::TicksBothSides);
     slider->setTickInterval(10);
@@ -59,31 +59,51 @@ LRVolumeSlider::LRVolumeSlider(const QString &title,
     //       alternatively connect/disconnect signal-slot in lockBox stateChanged
     //       QSignalTransition?
     connect(lSlider, &QSlider::valueChanged, [this](int newValue) {
-            if (this->lockBox->isChecked())
+            if (this->lockBox->isChecked()) {
+                QSignalBlocker block(this->rSlider);
                 this->rSlider->setValue(newValue);
+            }
+            emitValueChanged();
         });
     connect(rSlider, &QSlider::valueChanged, [this](int newValue) {
-            if (this->lockBox->isChecked())
+            if (this->lockBox->isChecked()) {
+                QSignalBlocker block(this->lSlider);
                 this->lSlider->setValue(newValue);
+            }
+            emitValueChanged();
         });
     connect(lMuteBox, &QCheckBox::stateChanged, [this](int state) {
-            if (this->lockBox->isChecked())
+            if (this->lockBox->isChecked()) {
+                QSignalBlocker block(this->lMuteBox);
                 this->rMuteBox->setCheckState(static_cast<Qt::CheckState>(state));
+            }
+            emitMuteStateChanged();
         });
     connect(rMuteBox, &QCheckBox::stateChanged, [this](int state) {
-            if (this->lockBox->isChecked())
+            if (this->lockBox->isChecked()) {
+                QSignalBlocker block(this->lMuteBox);
                 this->lMuteBox->setCheckState(static_cast<Qt::CheckState>(state));
-        });
-
-    connect(lSlider, &QSlider::valueChanged, this, &LRVolumeSlider::lValueChanged);
-    connect(rSlider, &QSlider::valueChanged, this, &LRVolumeSlider::rValueChanged);
-    connect(lMuteBox, &QCheckBox::stateChanged, [this](int state) {
-            emit lMuteStateChanged(state != Qt::Unchecked);
-        });
-    connect(rMuteBox, &QCheckBox::stateChanged, [this](int state) {
-            emit rMuteStateChanged(state != Qt::Unchecked);
+            }
+            emitMuteStateChanged();
         });
 }
+
+void LRVolumeSlider::value(int &lValue, int &rValue) const
+{
+    lValue = lSlider->value();
+    rValue = rSlider->value();
+}
+
+void LRVolumeSlider::emitValueChanged()
+{
+    emit valueChanged(this->lSlider->value(), this->rSlider->value());
+}
+
+void LRVolumeSlider::emitMuteStateChanged()
+{
+    emit muteStateChanged(this->lMuteBox->isChecked(), this->rMuteBox->isChecked());
+}
+
 
 VolumeSlider::VolumeSlider(const QString &title, QWidget *parent) :
     QGroupBox(title, parent)
@@ -103,4 +123,9 @@ VolumeSlider::VolumeSlider(const QString &title, QWidget *parent) :
     connect(muteBox, &QCheckBox::stateChanged, [this](int state) {
             emit muteStateChanged(state != Qt::Unchecked);
         });
+}
+
+int VolumeSlider::value() const
+{
+    return slider->value();
 }

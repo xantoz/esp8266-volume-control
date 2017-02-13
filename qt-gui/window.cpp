@@ -9,12 +9,13 @@
 #include <QHBoxLayout>
 
 // Set to non-zero when debugging GUI without actually connecting to server
-#define DEBUG_NO_CONNECT 0
+#define DEBUG_NO_CONNECT 1
 
 static const unsigned TIMEOUT = 10000;
 
 Window::Window(const QString &host, quint16 port)
 {
+    using namespace std::placeholders;
 
     masterSlider = new VolumeSlider("Master", this);
     frontSlider  = new LRVolumeSlider("Front", this);
@@ -45,36 +46,47 @@ Window::Window(const QString &host, quint16 port)
             this->fatalError(tr("Timed out connecting to server"));
     }
 
-    // TODO: scale slider values by masterslider
-    // TODO: seems that connecting signal to signal like this causes the signal to be sent using
-    //       the value of master slider... Need to create special slot for all lValueChanged/rValueChanged 
-    // TODO: alternatively change the values of the other sliders so that we can see the effect
-    //       the master slider has on the individual volumes? (going to be tricky to get
-    //       feedback the other way around)
-    /* *Currently only mute button on master slider is functional*
-    connect(masterSlider, &VolumeSlider::valueChanged,     frontSlider,  &LRVolumeSlider::lValueChanged);
-    connect(masterSlider, &VolumeSlider::valueChanged,     frontSlider,  &LRVolumeSlider::rValueChanged);
-    connect(masterSlider, &VolumeSlider::valueChanged,     censubSlider, &LRVolumeSlider::lValueChanged);
-    connect(masterSlider, &VolumeSlider::valueChanged,     censubSlider, &LRVolumeSlider::rValueChanged);
-    connect(masterSlider, &VolumeSlider::valueChanged,     rearSlider,   &LRVolumeSlider::lValueChanged);
-    connect(masterSlider, &VolumeSlider::valueChanged,     rearSlider,   &LRVolumeSlider::rValueChanged);
-    */
+    auto setVol = [this](const char *bothChan, // TODO: Make this into a traditional private slot? + use QSignalMapper
+                         const char *lChan,
+                         const char *rChan,
+                         int lValue, int rValue) {
+        // Scale by master slider
+        int maValue = this->masterSlider->value();
+        lValue = (lValue * maValue) / VolumeSlider::maxVal;
+        rValue = (rValue * maValue) / VolumeSlider::maxVal;
+
+        // Optimize when both channels same value
+        if (lValue == rValue) {
+            this->sendMsgHelper("set", bothChan, lValue);
+        } else {
+            this->sendMsgHelper("set", lChan, lValue);
+            this->sendMsgHelper("set", rChan, rValue);
+        }
+    };
+    connect(frontSlider,  &LRVolumeSlider::valueChanged, std::bind(setVol, "F",      "FL",  "FR",  _1, _2));
+    connect(censubSlider, &LRVolumeSlider::valueChanged, std::bind(setVol, "CENSUB", "CEN", "SUB", _1, _2));
+    connect(rearSlider,   &LRVolumeSlider::valueChanged, std::bind(setVol, "R",      "RL",  "RR",  _1, _2));
+
+    auto setMute = [this](const char *bothChan,
+                          const char *lChan,
+                          const char *rChan,
+                          bool lState, bool rState) {
+        // Optimize for both channels, same value
+        if (lState == rState) {
+            this->sendMsgHelper("mutechan", bothChan, (int)lState);
+        } else {
+            this->sendMsgHelper("mutechan", lChan, (int)lState);
+            this->sendMsgHelper("mutechan", rChan, (int)rState);
+        }
+    };
+    connect(frontSlider,  &LRVolumeSlider::muteStateChanged, std::bind(setMute, "F",      "FL",  "FR",  _1, _2));
+    connect(censubSlider, &LRVolumeSlider::muteStateChanged, std::bind(setMute, "CENSUB", "CEN", "SUB", _1, _2));
+    connect(rearSlider,   &LRVolumeSlider::muteStateChanged, std::bind(setMute, "R",      "RL",  "RR",  _1, _2));
+
+    connect(masterSlider, &VolumeSlider::valueChanged, frontSlider,  &LRVolumeSlider::emitValueChanged);
+    connect(masterSlider, &VolumeSlider::valueChanged, censubSlider, &LRVolumeSlider::emitValueChanged);
+    connect(masterSlider, &VolumeSlider::valueChanged, rearSlider,   &LRVolumeSlider::emitValueChanged);
     connect(masterSlider, &VolumeSlider::muteStateChanged, [this](bool state) { this->sendMsgHelper("mute", (int)state); });
-
-    connect(frontSlider,  &LRVolumeSlider::lValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "FL", newValue); });
-    connect(frontSlider,  &LRVolumeSlider::rValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "FR", newValue); });
-    connect(frontSlider,  &LRVolumeSlider::lMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "FL", (int)state); });
-    connect(frontSlider,  &LRVolumeSlider::rMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "FR", (int)state); });
-
-    connect(censubSlider, &LRVolumeSlider::lValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "CEN", newValue); });
-    connect(censubSlider, &LRVolumeSlider::rValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "SUB", newValue); });
-    connect(censubSlider, &LRVolumeSlider::lMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "CEN", (int)state); });
-    connect(censubSlider, &LRVolumeSlider::rMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "SUB", (int)state); });
-
-    connect(rearSlider,   &LRVolumeSlider::lValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "RL", newValue); });
-    connect(rearSlider,   &LRVolumeSlider::rValueChanged,     [this](int newValue) { this->sendMsgHelper("set", "RR", newValue); });
-    connect(rearSlider,   &LRVolumeSlider::lMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "RR", (int)state); });
-    connect(rearSlider,   &LRVolumeSlider::rMuteStateChanged, [this](bool state)   { this->sendMsgHelper("mutechan", "RL", (int)state); });
 }
 
 Window::~Window()
@@ -117,6 +129,9 @@ void Window::fatalError(const QString& _details)
 
 bool Window::serverConnect(const QString &host, quint16 port)
 {
+    if (NULL == socket)
+        return false;
+
     socket->connectToHost(host, port);
     // TODO: check that we've connected/error handling (not neccesarily here if perhaps Qt
     // provides some fancy signal for it)
@@ -130,6 +145,9 @@ bool Window::serverConnect(const QString &host, quint16 port)
 
 bool Window::serverDisconnect()
 {
+    if (NULL == socket)
+        return false;
+
     if (socket->state() == QTcpSocket::UnconnectedState)
         return true;
 
@@ -165,38 +183,37 @@ void Window::sendMsgHelper(const char *cmd, const char *chan, int level)
 
 void Window::sendMsg(const char *data)
 {
-    if (NULL != socket)
+    if (NULL == socket)
     {
-        socket->write(data);
-        if (!socket->waitForBytesWritten(TIMEOUT))
-        {
-            // TODO: disconnect here
-            error(tr("Timed out sending command to server."));
-            return;
-        }
-
-        // TODO: move reading the socket to a slot instead?
-        if (!socket->waitForReadyRead(TIMEOUT))
-        {
-            // TODO: disconnect here
-            error(tr("Timed out reading status message from server."));
-            return;
-        }
-        char status[256];
-        qint64 lineLength = socket->readLine(status, sizeof(status));
-        if (lineLength == -1)
-        {
-            // TODO: set disconnected mode here (disabled sliders & all)
-            error(tr("Problem reading status message from server."));
-            return;
-        }
-
-        printf("Got status string: %s", status);
-
-        // TODO: use the read status string here to update state of sliders
+        puts("Tried to send but socket not initialized");
+        return;
     }
-    else
+
+    socket->write(data);
+    if (!socket->waitForBytesWritten(TIMEOUT))
     {
-        error(tr("Tried to send but socket not initialized"));
+        // TODO: disconnect here
+        error(tr("Timed out sending command to server."));
+        return;
     }
+
+    // TODO: move reading the socket to a slot instead?
+    if (!socket->waitForReadyRead(TIMEOUT))
+    {
+        // TODO: disconnect here
+        error(tr("Timed out reading status message from server."));
+        return;
+    }
+    char status[256];
+    qint64 lineLength = socket->readLine(status, sizeof(status));
+    if (lineLength == -1)
+    {
+        // TODO: set disconnected mode here (disabled sliders & all)
+        error(tr("Problem reading status message from server."));
+        return;
+    }
+
+    printf("Got status string: %s", status);
+
+    // TODO: use the read status string here to update state of sliders
 }
