@@ -9,10 +9,12 @@
 #include <QMetaObject>
 #include <QMessageBox>
 #include <QHBoxLayout>
+#include <QVBoxLayout>
 
 // Set to non-zero when debugging GUI without actually connecting to server
 #define DEBUG_NO_CONNECT 0
 
+static const quint16 DEFAULT_PORT = 1128;
 static const unsigned TIMEOUT = 10000;
 
 Window::Window()
@@ -25,13 +27,21 @@ Window::Window()
     censubSlider = new LRVolumeSlider("Center/Sub", this, "CEN", "SUB");
     rearSlider   = new LRVolumeSlider("Rear", this);
 
-    QHBoxLayout *layout = new QHBoxLayout(this);
-    layout->addWidget(masterSlider);
-    layout->addWidget(frontSlider);
-    layout->addWidget(censubSlider);
-    layout->addWidget(rearSlider);
+    connectionBox = new ConnectionBox();
 
-    this->setLayout(layout);
+
+    QVBoxLayout *vLayout = new QVBoxLayout(this);
+
+    QHBoxLayout *sliderLayout = new QHBoxLayout();
+    sliderLayout->addWidget(masterSlider);
+    sliderLayout->addWidget(frontSlider);
+    sliderLayout->addWidget(censubSlider);
+    sliderLayout->addWidget(rearSlider);
+
+    vLayout->addWidget(connectionBox, Qt::AlignRight);
+    vLayout->addLayout(sliderLayout);
+
+    this->setLayout(vLayout);
 
     auto setVol = [this](const char *bothChan, // TODO: Make this into a traditional private slot? + use QSignalMapper
                          const char *lChan,
@@ -80,11 +90,16 @@ Window::Window()
 
     // Set up socket (but don't connect just yet)
     this->socketSetup();
+
+    connectionBox->setValues("", DEFAULT_PORT);
+    connect(connectionBox, &ConnectionBox::connect,    this, &Window::serverConnect);
+    connect(connectionBox, &ConnectionBox::disconnect, this, &Window::serverDisconnect);
 }
 
 Window::Window(const QString &host, quint16 port) :
     Window()
 {
+    connectionBox->setValues(host, port);
     this->serverConnect(host, port);
 }
 
@@ -137,16 +152,18 @@ void Window::socketSetup()
         this->socket = new QTcpSocket(this);
 
         connect(socket, &QTcpSocket::disconnected, this, &Window::sliderDisable);
+        connect(socket, &QTcpSocket::disconnected, connectionBox, &ConnectionBox::setDisconnected);
         connect(socket, &QTcpSocket::disconnected, []() { qDebug() << "Disconnected"; });
         connect(socket, &QTcpSocket::connected,    this, &Window::sliderEnable);
+        connect(socket, &QTcpSocket::connected,    connectionBox, &ConnectionBox::setConnected);
         connect(socket, &QTcpSocket::connected,    []() { qDebug() << "Connected"; });
-        connect(socket, &QTcpSocket::connected,    this, &Window::sliderEnable);
         connect(socket, static_cast<void (QTcpSocket::*)(QAbstractSocket::SocketError)>
                 (&QAbstractSocket::error), [this](QAbstractSocket::SocketError) {
                     auto errorString = this->socket->errorString();
                     qDebug() << "SOCKET ERROR " << errorString;
-                    this->serverDisconnect();
+                    this->socket->abort();
                     this->error(errorString);
+                    this->connectionBox->setDisconnected(); // Need to reset connectionBox on failure during connection and such
                 });
         connect(socket, &QTcpSocket::readyRead, this, &Window::readStatusMessage);
     }
@@ -240,7 +257,7 @@ void Window::serverConnect(const QString &host, quint16 port)
     if (NULL == socket)
         return;
 
-    // Fire-once connection (get server status on connect)
+    // Fire-once connection (get server status on socket connect)
     auto conn = std::make_shared<QMetaObject::Connection>();
     *conn = connect(socket, &QTcpSocket::connected, [this, conn]() {
             this->sendCmd("status"); // Send status cmd
@@ -297,5 +314,5 @@ void Window::sendMsg(const char *data)
         return;
     }
 
-    socket->waitForReadyRead();
+    socket->waitForReadyRead(TIMEOUT);
 }

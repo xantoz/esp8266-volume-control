@@ -4,6 +4,7 @@
 #include <QTcpSocket>
 
 #include "VolumeSlider.h"
+#include "ConnectionBox.h"
 
 class Window : public QWidget
 {
@@ -24,11 +25,13 @@ public slots:
     /// \brief Read status message from server
     void readStatusMessage();
 
+private slots:
+    void serverConnect(const QString &host, quint16 port);
+    void serverDisconnect();
+
 private:
     /// \brief Internal method to setup socket object
     void socketSetup();
-    void serverConnect(const QString &host, quint16 port);
-    void serverDisconnect();
 
     /// \brief Parse and apply status message from server
     void parseStatusMessage(const char *status);
@@ -55,6 +58,8 @@ private:
      * Send data to server
      */
     void sendMsg(const char *data);
+
+    ConnectionBox *connectionBox;
 
     VolumeSlider *masterSlider;
     LRVolumeSlider *frontSlider;
