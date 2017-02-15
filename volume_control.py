@@ -1,7 +1,7 @@
 import sys
 import math
 import usocket as socket
-import errno
+import uerrno as errno
 from mcp42xxx import MCP42XXX
 
 # TODO: maybe move networking/protocol portion outside VolumeController class to its own class or module?
@@ -34,7 +34,7 @@ class VolumeController(object):
     CEN = R
 
     def __init__(self):
-        self.pot = MCP42XXX(daisyCount=self.NUMPOTS)
+        self.pot = MCP42XXX(baudrate=40000, daisyCount=self.NUMPOTS)
         self.levels = [[0,0] for _ in range(self.NUMPOTS)] # TODO: initialize from value stored to flash (re-store periodically, or on request)
         self.mutes  = [[False,False] for _ in range(self.NUMPOTS)]
         self.push_levels()
