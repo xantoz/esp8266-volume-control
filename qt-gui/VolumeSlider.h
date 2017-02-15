@@ -34,7 +34,7 @@ public:
                    const QString &rLabelString);
 
     /**
-     * \brief get value of sliders
+     * \brief Get value of sliders
      *
      * \param [out] lValue   store value of left slider here
      * \param [out] rValue   store value of right slider here
@@ -50,6 +50,10 @@ public slots:
     // signal to be emitted, even though the actual value hasn't changed
     void emitValueChanged();
     void emitMuteStateChanged();
+    /// \brief Set value of sliders. Will force-untick lockBox if lValue != rValue 
+    void setValues(int lValue, int rValue);
+    /// \brief Set value of sliders. Will force-untick lockBox if lTick != rTick 
+    void setMuteBoxes(bool lTicked, bool rTicked);
 
 private:
     QSlider *lSlider;
@@ -74,6 +78,12 @@ public:
 signals:
     void valueChanged(int newValue);
     void muteStateChanged(bool state);
+
+public slots:
+    /// \brief set value of slider
+    void setValue(int newValue);
+    /// \brief set ticked state of mute checkbox
+    void setMuteBox(bool ticked);
 
 private:
     QSlider *slider;

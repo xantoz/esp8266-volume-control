@@ -42,7 +42,7 @@ LRVolumeSlider::LRVolumeSlider(const QString &title,
 
     lMuteBox = new QCheckBox(tr("Mute"), this);
     rMuteBox = new QCheckBox(tr("Mute"), this);
-    
+
     lockBox = new QCheckBox(tr("Lock sliders"), this);
     lockBox->setChecked(true); // Locked by default
 
@@ -104,6 +104,35 @@ void LRVolumeSlider::emitMuteStateChanged()
     emit muteStateChanged(this->lMuteBox->isChecked(), this->rMuteBox->isChecked());
 }
 
+void LRVolumeSlider::setValues(int lValue, int rValue)
+{
+    // valueChanged signal would be sent twice, let's instead handle it manually
+    QSignalBlocker lBlock(this->lSlider), rBlock(this->rSlider);
+
+    // Force-uncheck lockBox if we're setting uneven values
+    if (lValue != rValue)
+        this->lockBox->setChecked(false);
+
+    this->lSlider->setValue(lValue);
+    this->rSlider->setValue(rValue);
+
+    emitValueChanged();
+}
+
+void LRVolumeSlider::setMuteBoxes(bool lTicked, bool rTicked)
+{
+    // muteStateChanged signal would be sent twice, let's instead send it manually
+    QSignalBlocker lBlock(this->lMuteBox), rBlock(this->rMuteBox);
+
+    // Force-uncheck lockBox if mute state differs
+    if (lTicked != rTicked)
+        this->lockBox->setChecked(false);
+
+    this->lMuteBox->setChecked(lTicked);
+    this->rMuteBox->setChecked(rTicked);
+
+    emitMuteStateChanged();
+}
 
 VolumeSlider::VolumeSlider(const QString &title, QWidget *parent) :
     QGroupBox(title, parent)
@@ -128,4 +157,14 @@ VolumeSlider::VolumeSlider(const QString &title, QWidget *parent) :
 int VolumeSlider::value() const
 {
     return slider->value();
+}
+
+void VolumeSlider::setValue(int newValue)
+{
+    slider->setValue(newValue);
+}
+
+void VolumeSlider::setMuteBox(bool ticked)
+{
+    muteBox->setChecked(ticked);
 }

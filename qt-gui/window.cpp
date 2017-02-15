@@ -2,22 +2,25 @@
 
 #include <stdio.h>
 #include <functional>
+#include <memory>
 
+#include <QtGlobal>
 #include <QApplication>
 #include <QMetaObject>
 #include <QMessageBox>
 #include <QHBoxLayout>
 
 // Set to non-zero when debugging GUI without actually connecting to server
-#define DEBUG_NO_CONNECT 1
+#define DEBUG_NO_CONNECT 0
 
 static const unsigned TIMEOUT = 10000;
 
-Window::Window(const QString &host, quint16 port)
+Window::Window()
 {
     using namespace std::placeholders;
 
     masterSlider = new VolumeSlider("Master", this);
+    masterSlider->setValue(99);
     frontSlider  = new LRVolumeSlider("Front", this);
     censubSlider = new LRVolumeSlider("Center/Sub", this, "CEN", "SUB");
     rearSlider   = new LRVolumeSlider("Rear", this);
@@ -30,22 +33,6 @@ Window::Window(const QString &host, quint16 port)
 
     this->setLayout(layout);
 
-    if (DEBUG_NO_CONNECT)
-    {
-        socket = NULL;
-    }
-    else
-    {
-        socket = new QTcpSocket(this);
-        if (!this->serverConnect(host, port))
-            this->fatalError(tr("Could not connect to volume control server (host: %1, port: %2)").arg(host).arg(port));
-
-        // Maybe not actually needed, since in our case this constructor runs before the event loop
-        // is started so the sliders won't be triggering any events.
-        if (!socket->waitForConnected(TIMEOUT))
-            this->fatalError(tr("Timed out connecting to server"));
-    }
-
     auto setVol = [this](const char *bothChan, // TODO: Make this into a traditional private slot? + use QSignalMapper
                          const char *lChan,
                          const char *rChan,
@@ -57,10 +44,10 @@ Window::Window(const QString &host, quint16 port)
 
         // Optimize when both channels same value
         if (lValue == rValue) {
-            this->sendMsgHelper("set", bothChan, lValue);
+            this->sendCmd("set", bothChan, lValue);
         } else {
-            this->sendMsgHelper("set", lChan, lValue);
-            this->sendMsgHelper("set", rChan, rValue);
+            this->sendCmd("set", lChan, lValue);
+            this->sendCmd("set", rChan, rValue);
         }
     };
     connect(frontSlider,  &LRVolumeSlider::valueChanged, std::bind(setVol, "F",      "FL",  "FR",  _1, _2));
@@ -73,10 +60,10 @@ Window::Window(const QString &host, quint16 port)
                           bool lState, bool rState) {
         // Optimize for both channels, same value
         if (lState == rState) {
-            this->sendMsgHelper("mutechan", bothChan, (int)lState);
+            this->sendCmd("mutechan", bothChan, (int)lState);
         } else {
-            this->sendMsgHelper("mutechan", lChan, (int)lState);
-            this->sendMsgHelper("mutechan", rChan, (int)rState);
+            this->sendCmd("mutechan", lChan, (int)lState);
+            this->sendCmd("mutechan", rChan, (int)rState);
         }
     };
     connect(frontSlider,  &LRVolumeSlider::muteStateChanged, std::bind(setMute, "F",      "FL",  "FR",  _1, _2));
@@ -86,12 +73,24 @@ Window::Window(const QString &host, quint16 port)
     connect(masterSlider, &VolumeSlider::valueChanged, frontSlider,  &LRVolumeSlider::emitValueChanged);
     connect(masterSlider, &VolumeSlider::valueChanged, censubSlider, &LRVolumeSlider::emitValueChanged);
     connect(masterSlider, &VolumeSlider::valueChanged, rearSlider,   &LRVolumeSlider::emitValueChanged);
-    connect(masterSlider, &VolumeSlider::muteStateChanged, [this](bool state) { this->sendMsgHelper("mute", (int)state); });
+    connect(masterSlider, &VolumeSlider::muteStateChanged, [this](bool state) { this->sendCmd("mute", (int)state); });
+
+    // Sliders disabled by default
+    this->sliderDisable();
+
+    // Set up socket (but don't connect just yet)
+    this->socketSetup();
+}
+
+Window::Window(const QString &host, quint16 port) :
+    Window()
+{
+    this->serverConnect(host, port);
 }
 
 Window::~Window()
 {
-    // Not really neccesary since sockets are closed on destruction (which Qt automatizes).
+    // Not really neccesary since sockets are closed on destruction (which Qt automates).
     // Although we might want to be nice and send "byebye" to the server?
     this->serverDisconnect();
 }
@@ -127,93 +126,166 @@ void Window::fatalError(const QString& _details)
     // QMetaObject::invokeMethod(qApp, "exit", Qt::QueuedConnection, Q_ARG(int, 1));
 }
 
-bool Window::serverConnect(const QString &host, quint16 port)
+void Window::socketSetup()
 {
-    if (NULL == socket)
-        return false;
+    if (DEBUG_NO_CONNECT)
+    {
+        this->socket = NULL;
+    }
+    else
+    {
+        this->socket = new QTcpSocket(this);
 
-    socket->connectToHost(host, port);
-    // TODO: check that we've connected/error handling (not neccesarily here if perhaps Qt
-    // provides some fancy signal for it)
-    // Try connecting the QAbstractSocket::error signal up to a slot in Window!
-
-    // TODO: send "status" and receive state of volume controller as status string and update
-    // sliders based on this
-
-    return true;
+        connect(socket, &QTcpSocket::disconnected, this, &Window::sliderDisable);
+        connect(socket, &QTcpSocket::disconnected, []() { qDebug() << "Disconnected"; });
+        connect(socket, &QTcpSocket::connected,    this, &Window::sliderEnable);
+        connect(socket, &QTcpSocket::connected,    []() { qDebug() << "Connected"; });
+        connect(socket, &QTcpSocket::connected,    this, &Window::sliderEnable);
+        connect(socket, static_cast<void (QTcpSocket::*)(QAbstractSocket::SocketError)>
+                (&QAbstractSocket::error), [this](QAbstractSocket::SocketError) {
+                    auto errorString = this->socket->errorString();
+                    qDebug() << "SOCKET ERROR " << errorString;
+                    this->serverDisconnect();
+                    this->error(errorString);
+                });
+        connect(socket, &QTcpSocket::readyRead, this, &Window::readStatusMessage);
+    }
 }
 
-bool Window::serverDisconnect()
+void Window::sliderDisable()
+{
+    masterSlider->setEnabled(false);
+    frontSlider->setEnabled(false);
+    censubSlider->setEnabled(false);
+    rearSlider->setEnabled(false);
+}
+
+void Window::sliderEnable()
+{
+    masterSlider->setEnabled(true);
+    frontSlider->setEnabled(true);
+    censubSlider->setEnabled(true);
+    rearSlider->setEnabled(true);
+}
+
+void Window::readStatusMessage()
+{
+    char status[512];
+    qint64 lineLength = socket->readLine(status, sizeof(status));
+    if (lineLength == -1)
+    {
+        error(tr("Problem reading status message from server. Disconnecting."));
+        serverDisconnect();
+        return;
+    }
+
+    qDebug() << "Got status string: " << QString(status).simplified();
+
+    if (0 == strncmp(this->command, "status", 6))
+    {
+        // Parse and apply status message to sliders if we requested this status message
+        // specifically using the status command.
+
+        qDebug() << "Parsing status string";
+        parseStatusMessage(status);
+    }
+}
+
+void Window::parseStatusMessage(const char *status)
+{
+    // Note: This assumes L/R positions of CEN/SUB as L = SUB and R = CEN ...
+    // TODO?: instead implement named properties server-side (python dict-like syntax?)
+    int fl_level, fr_level, fl_mute, fr_mute,
+        sub_level, cen_level, sub_mute, cen_mute,
+        rl_level, rr_level, rl_mute, rr_mute;
+    int global_mute;
+    if (13 != sscanf(status, "OK 0: ( %d , %d , %d , %d ) ; 1: ( %d , %d , %d , %d ) ; 2: ( %d , %d , %d , %d ) ; Mute: %d ",
+                     &fl_level, &fr_level, &fl_mute, &fr_mute,
+                     &sub_level, &cen_level, &sub_mute, &cen_mute,
+                     &rl_level, &rr_level, &rl_mute, &rr_mute,
+                     &global_mute))
+    {
+        qDebug() << "ERROR: Couldn't parse server message";
+        error(tr("Couldn't parse server message"));
+        return;
+    }
+
+    // We're just adjusting our sliders to server reality, don't send any signals
+    QSignalBlocker frontBlock(frontSlider), censubBlock(censubSlider), rearBlock(rearSlider);
+    
+    frontSlider->setValues(fl_level, fr_level);
+    frontSlider->setMuteBoxes(fl_mute, fr_mute);
+    censubSlider->setValues(cen_level, sub_level); // NOTE: Argument order!
+    censubSlider->setMuteBoxes(cen_mute, sub_mute);
+    rearSlider->setValues(rl_level, rr_level);
+    rearSlider->setMuteBoxes(rl_mute, rr_mute);
+
+    // TODO?: Make master slider a server-side property (because we'll be able to read it back)
+    masterSlider->setValue(VolumeSlider::maxVal);
+    masterSlider->setMuteBox(global_mute);
+}
+
+void Window::serverConnect(const QString &host, quint16 port)
 {
     if (NULL == socket)
-        return false;
+        return;
+
+    // Fire-once connection (get server status on connect)
+    auto conn = std::make_shared<QMetaObject::Connection>();
+    *conn = connect(socket, &QTcpSocket::connected, [this, conn]() {
+            this->sendCmd("status"); // Send status cmd
+            this->disconnect(*conn);
+        });
+    socket->connectToHost(host, port);
+}
+
+void Window::serverDisconnect()
+{
+    if (NULL == socket)
+        return;
 
     if (socket->state() == QTcpSocket::UnconnectedState)
-        return true;
+        return;
 
-    // TODO: send byebye here?
+    this->sendCmd("byebye");
+    // TODO: read back 'CYA' here?
 
     socket->close();
-    return true;
 }
 
-// Size used for the temporary on-stack buffers we snprintf to when building commands
-#define CMD_BUFFER_SIZE 128
-
-void Window::sendMsgHelper(const char *cmd)
+void Window::sendCmd(const char *cmd)
 {
-    char data[CMD_BUFFER_SIZE];
-    snprintf(data, sizeof(data), "%s\n", cmd);
-    this->sendMsg(data);
+    snprintf(command, sizeof(command), "%s\n", cmd);
+    this->sendMsg(command);
 }
 
-void Window::sendMsgHelper(const char *cmd, int level)
+void Window::sendCmd(const char *cmd, int level)
 {
-    char data[CMD_BUFFER_SIZE];
-    snprintf(data, sizeof(data), "%s %d\n", cmd, level);
-    this->sendMsg(data);
+    snprintf(command, sizeof(command), "%s %d\n", cmd, level);
+    this->sendMsg(command);
 }
 
-void Window::sendMsgHelper(const char *cmd, const char *chan, int level)
+void Window::sendCmd(const char *cmd, const char *chan, int level)
 {
-    char data[CMD_BUFFER_SIZE];
-    snprintf(data, sizeof(data), "%s %s %d\n", cmd, chan, level);
-    this->sendMsg(data);
+    snprintf(command, sizeof(command), "%s %s %d\n", cmd, chan, level);
+    this->sendMsg(command);
 }
 
 void Window::sendMsg(const char *data)
 {
     if (NULL == socket)
     {
-        puts("Tried to send but socket not initialized");
+        qDebug() << "Tried to send but socket not initialized";
         return;
     }
 
     socket->write(data);
     if (!socket->waitForBytesWritten(TIMEOUT))
     {
-        // TODO: disconnect here
+        this->serverDisconnect();
         error(tr("Timed out sending command to server."));
         return;
     }
 
-    // TODO: move reading the socket to a slot instead?
-    if (!socket->waitForReadyRead(TIMEOUT))
-    {
-        // TODO: disconnect here
-        error(tr("Timed out reading status message from server."));
-        return;
-    }
-    char status[256];
-    qint64 lineLength = socket->readLine(status, sizeof(status));
-    if (lineLength == -1)
-    {
-        // TODO: set disconnected mode here (disabled sliders & all)
-        error(tr("Problem reading status message from server."));
-        return;
-    }
-
-    printf("Got status string: %s", status);
-
-    // TODO: use the read status string here to update state of sliders
+    socket->waitForReadyRead();
 }
