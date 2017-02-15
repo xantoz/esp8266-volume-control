@@ -179,12 +179,22 @@ void Window::readStatusMessage()
         return;
     }
 
-    qDebug() << "Got status string: " << QString(status).simplified();
+    qDebug() << "Got status string:" << QString(status).simplified();
+
+    if (0 == strncmp(status, "ERROR", 5))
+    {
+        // Parse ERROR message
+        QString msg = tr("Got error message from server: ");
+        msg.append(status);
+        qDebug() << "ERROR: " << msg;
+        error(msg);
+        return;
+    }
 
     if (0 == strncmp(this->command, "status", 6))
     {
         // Parse and apply status message to sliders if we requested this status message
-        // specifically using the status command.
+        // specifically using the status command
 
         qDebug() << "Parsing status string";
         parseStatusMessage(status);
@@ -212,7 +222,7 @@ void Window::parseStatusMessage(const char *status)
 
     // We're just adjusting our sliders to server reality, don't send any signals
     QSignalBlocker frontBlock(frontSlider), censubBlock(censubSlider), rearBlock(rearSlider);
-    
+
     frontSlider->setValues(fl_level, fr_level);
     frontSlider->setMuteBoxes(fl_mute, fr_mute);
     censubSlider->setValues(cen_level, sub_level); // NOTE: Argument order!
