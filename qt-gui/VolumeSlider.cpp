@@ -74,7 +74,7 @@ LRVolumeSlider::LRVolumeSlider(const QString &title,
         });
     connect(lMuteBox, &QCheckBox::stateChanged, [this](int state) {
             if (this->lockBox->isChecked()) {
-                QSignalBlocker block(this->lMuteBox);
+                QSignalBlocker block(this->rMuteBox);
                 this->rMuteBox->setCheckState(static_cast<Qt::CheckState>(state));
             }
             emitMuteStateChanged();
