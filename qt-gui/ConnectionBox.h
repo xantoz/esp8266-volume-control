@@ -23,6 +23,9 @@ public slots:
     /// \brief Set values of the textboxes
     void setValues(const QString &host, quint16 port);
 
+    /// \brief Clicks button
+    void click();
+
     /**
      * \brief Inform widget that we're connected now and change the pushbutton to a disconnect
      *        button. State is not changed automatically by the PushButton. Should be connected

@@ -96,11 +96,16 @@ Window::Window()
     connect(connectionBox, &ConnectionBox::disconnect, this, &Window::serverDisconnect);
 }
 
+Window::Window(const QString &host) :
+    Window(host, DEFAULT_PORT)
+{
+}
+
 Window::Window(const QString &host, quint16 port) :
     Window()
 {
     connectionBox->setValues(host, port);
-    this->serverConnect(host, port);
+    connectionBox->click();
 }
 
 Window::~Window()

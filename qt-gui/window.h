@@ -12,6 +12,7 @@ class Window : public QWidget
 
 public:
     Window();
+    Window(const QString &host);
     Window(const QString &host, quint16 port);
     virtual ~Window();
 

@@ -13,8 +13,8 @@ ConnectionBox::ConnectionBox() :
 
     layout->setAlignment(Qt::AlignRight);
 
-    QLabel *hostLabel = new QLabel(tr("Host:"));
-    QLabel *portLabel = new QLabel(tr("Port:"));
+    QLabel *hostLabel = new QLabel(tr("Host:"), this);
+    QLabel *portLabel = new QLabel(tr("Port:"), this);
     hostLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     portLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
@@ -40,6 +40,9 @@ ConnectionBox::ConnectionBox() :
     // button->setEnabled(false);
     // connect(hostBox, &QLineEdit::editingFinished, )
 
+    QObject::connect(hostBox, &QLineEdit::returnPressed, button, &QPushButton::click);
+    QObject::connect(portBox, &QLineEdit::returnPressed, button, &QPushButton::click);
+
     buttonConnection = QObject::connect(button, &QPushButton::clicked, this, &ConnectionBox::emitConnect);
 
     this->setLayout(layout);
@@ -58,6 +61,11 @@ void ConnectionBox::setValues(const QString &host, quint16 port)
     portBox->setText(QString::number(port));
 }
 
+void ConnectionBox::click()
+{
+    button->click();
+}
+
 void ConnectionBox::emitConnect()
 {
     // Show that we're connecting + disallow more clicks for the time being to avoid being able
@@ -66,13 +74,17 @@ void ConnectionBox::emitConnect()
     button->setText(tr("Connecting..."));
     button->setEnabled(false);
 
+    hostBox->setEnabled(false);
+    portBox->setEnabled(false);
+
+
     emit connect(hostBox->text(), portBox->text().toShort());
 }
 
 void ConnectionBox::setConnected()
 {
     connected = true;
-    hostBox->setEnabled(false); // TODO: or use setReadOnly instead?
+    hostBox->setEnabled(false);
     portBox->setEnabled(false);
 
     QObject::disconnect(buttonConnection);
