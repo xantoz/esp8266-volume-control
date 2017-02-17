@@ -85,11 +85,11 @@ class MCP42XXX(object):
         for value, channel in zip(reversed(values), reversed(channels)):
             chan = (channel & 0b11)
             if value == 'shdn':
-                self.spi.write(bytearray([0b00100000 | chan, 0x00])) # send SHDN
+                self.spi.write(bytes([0b00100000 | chan, 0x00])) # send SHDN
             elif value == None:
-                self.spi.write(bytearray([0b00110000, 0x00])) # send NOP
+                self.spi.write(bytes([0b00110000, 0x00])) # send NOP
             else:
-                self.spi.write(bytearray([0b00010000 | chan, value & 0xff])) # normal write
+                self.spi.write(bytes([0b00010000 | chan, value & 0xff])) # normal write
         # Need to wait for HSPI peripheral to finish before disableing CS
         time.sleep_ms(2)        # TODO: make this depend on baudrate (currently set for 10000 baud empirically using logic analyzer)
         self.cs.high()          # disable CS
