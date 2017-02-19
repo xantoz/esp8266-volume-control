@@ -150,85 +150,13 @@ class VolumeController(object):
 
     def get_status_string(self):
         """Returns a string describing the state of the volume controller.
-           Format: <pot nr>: (<left level>, <right level>, <left mute state>, <right mute state>); ...; Mute: <global mute state>"""
+           NOTE: This string is used directectly by VolumeServer, it thus forms part of the protocol.
+           Format: <pot nr>: (<left level>, <right level>, <left mute state>, <right mute state>); ...; Mute: <global mute state>
+        """
         # TODO: Switch over to symbolic mapped names instead? (FL, FR, RR, RL, CEN, SUB etc.)
         return "; ".join(["{}: ({},{},{},{})".format(i, schan[self.L], schan[self.R], int(smute[self.L]), int(smute[self.R]))
                           for i, (schan, smute) in enumerate(zip(self.levels, self.mutes))]) \
                     + "; Mute: {}".format(int(self.mute_state))
-
-    def server_loop(self, port, bindaddr="0.0.0.0"):
-        """Start listening on port 'port' (bound to bindaddr) for volume
-           control commands. The protocol is composed of plaintext
-           ASCII commands delimited by newlines. Arguments are
-           separated by whitespace. The first argument is the command
-           to run while the following ones are its arguments.
-
-        """
-        addr = socket.getaddrinfo(bindaddr, port)[0][-1]
-
-        s = socket.socket()
-        try:
-            s.bind(addr)
-            s.listen(1)
-
-            print("{}: listening on {}".format(self.__qualname__, addr))
-
-            while True:
-                cl, addr = s.accept()
-                try:
-                    print('{}: client connected from {}'.format(self.__qualname__, addr))
-                    self._client(cl, addr)
-                except OSError as e:
-                    print("ERROR: Got", e)
-                    sys.print_exception(e)
-                    # TODO: Do we need to handle errno.ECONNRESET specially?
-                # TODO: seems like we might need to handle NameError? (or is my code just buggy?)
-                finally:
-                    cl.close()
-        finally:
-            s.close()
-
-    ## PRIVATE ##
-
-    def _client(self, cl, addr):
-        """Process for handling client."""
-        # TODO: Try to allow several clients connected at once using
-        #       some fancy slicing or something like that (implement
-        #       threads using timers & generators or something, yay!)? coroutines?
-        #       Or simply change protocol to one command per connection?
-
-        def send_string(string):
-            cl.send(bytes(string, 'ascii'))
-            cl.send(b'\n')
-
-        def send_error_msg(msg):
-            print("ERROR:",msg)
-            send_string("ERROR " + msg)
-
-        while True:
-            line = cl.readline().decode('ascii')
-            print("{}: got cmd '{}'".format(self.__qualname__, line.rstrip())) # DEBUG (remove later)
-
-            if not line or line == '\r\n' or line == '\n':
-                break
-            if line[:6] == 'byebye':
-                send_string("CYA")
-                break
-            
-            try:
-                self._process_cmd(line)
-            except TypeError as e:
-                send_error_msg("wrong amount of args")
-                sys.print_exception(e)
-            except KeyError as e:
-                send_error_msg("no such command")
-                sys.print_exception(e)
-            except ValueError as e:
-                send_error_msg("bad argument: " + str(e))
-                sys.print_exception(e)
-            else:
-                send_string("OK " + self.get_status_string())
-        print("{}: client {} disconnected".format(self.__qualname__, addr)) # DEBUG (remove later)
 
     _chan_table = {
         'FL': (0, L), 'FR': (0, R), 'F': (0, LR),
@@ -237,67 +165,13 @@ class VolumeController(object):
     }
 
     @classmethod
-    def _get_chan(cls, chan):
-        """chan is a string such as FL,FR etc. (see _chan_table)"""
+    def get_chan(cls, chan):
+        """Convert from string description of channel to (<pot ID>, <L/R>)
+        tuple that can be used with set_volume etc. chan is a string
+        such as FL,FR etc. (see _chan_table)
+        """
         try:
             return cls._chan_table[chan]
         except KeyError:
             raise ValueError("bad channel")
 
-    def _cmd_set(self, chan, level):
-        """Command to set a channel.
-           Usage: set <chan> <0-99>"""
-        schan, lr = self._get_chan(chan)
-        self.set_volume(schan, lr, int(level))
-
-    def _cmd_mutechan(self, chan, state):
-        """Command to mute/unmute a single channel
-           Usage: mute <chan> <0/1>"""
-        schan, lr = self._get_chan(chan)
-        self.set_mute(schan, lr, bool(int(state)))
-
-    def _cmd_inc(self, chan):
-        schan, lr = self._get_chan(chan)
-        level = self.get_volume(schan, lr)
-        if level < self.MAX_LEVEL:
-            self.set_volume(schan, lr, level + 1)
-
-    def _cmd_dec(self, chan):
-        schan, lr = self._get_chan(chan)
-        level = self.get_volume(schan, lr)
-        if level > self.MIN_LEVEL:
-            self.set_volume(schan, lr, level - 1)
-
-    def _cmd_mute(self, state):
-        """Command to mute/unmute all channels.
-           Usage: mute <0/1>"""
-        state = bool(int(state))
-        if state == False:
-            self.unmute()
-        else:
-            self.mute()
-
-    def _cmd_status(self):
-        """Basically a nop, since status is always sent to the client after
-           any successful command.
-        """
-        pass
-
-    # Used by _process_cmd
-    _dispatch_table = {'set': _cmd_set,
-                       'inc': _cmd_inc,
-                       'dec': _cmd_dec,
-                       'status': _cmd_status,
-                       'mute': _cmd_mute,
-                       'mutechan': _cmd_mutechan,
-                       'reset': reset}
-
-    def _process_cmd(self, line):
-        banana = line.split()
-        cmd, args = banana[0], banana[1:]
-        self._dispatch_table[cmd](self, *args)
-
-def main():
-    """Main function for the Volume Controller application"""
-    vc = VolumeController()
-    return vc.server_loop(port=1128)
