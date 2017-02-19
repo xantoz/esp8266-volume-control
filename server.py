@@ -75,6 +75,27 @@ class VolumeServer(object):
         self._dispatch_table[cmd](self, *args)
 
 
+    def server_init(self):
+        pass
+
+    def server_onestep(self, timeout=None):
+        pass
+
+    def server_deinit(self):
+        pass
+
+    def server_loop(self):
+        """Run a foreground, blocking, server loop"""
+
+        self.server_init()
+
+        try:
+            while True:
+                self.server_onestep(timeout=None)
+        finally:
+            self.server_deinit()
+
+
 class TCPVolumeServer(VolumeServer):
     """Implements a row-based (commands are delineated with newline)
        textual TCP protocol with persistent connections.
@@ -90,70 +111,77 @@ class TCPVolumeServer(VolumeServer):
 
     """
 
-    def __init__(self):
+    def __init__(self, port, bindaddr="0.0.0.0"):
+        """Create a TCPVolumeServer bound to port and bindaddr"""
         super().__init__()
+        self.port = port
+        self.bindaddr = bindaddr
 
-    def server_loop(self, port, bindaddr="0.0.0.0"):
-        """Start listening on port 'port' (bound to bindaddr) for volume
-           control commands.
-
+    def server_init(self):
+        """Start listening on volume control commands.
         """
 
-        # TODO: split up into init (goes into __init__) and loop body.
-        # That way we can generalize the server loop (implement in
-        # VolumeServer), and even do more advanced things, such as
-        # running it on a timer (basically a poor mans thread).
+        addr = socket.getaddrinfo(self.bindaddr, self.port)[0][-1]
+        self.s = socket.socket()
+        self.s.setblocking(0)        # non-blocking because we use polling
 
-        addr = socket.getaddrinfo(bindaddr, port)[0][-1]
-        s = socket.socket()
-        s.setblocking(0)
-
-        poll = select.poll()
-        poll.register(s, READ_ONLY)
+        self.poll = select.poll()
+        self.poll.register(self.s, READ_ONLY)
         # Keep a set of all clients so we can disconnect them properly
         # in case of a fatal error. We can't use set() because sockets
         # aren't hashable.
-        clientset = []
+        self.clientset = []
 
-        try:
-            s.bind(addr)
-            s.listen(5)
+        self.s.bind(addr)
+        self.s.listen(5)
 
-            print("{}: listening on {}".format(self.__qualname__, addr))
+        print("{}: listening on {}".format(self.__qualname__, addr))
 
-            while True:
-                for res in poll.poll():
-                    print("{}: poll: '{}'".format(self.__qualname__, res)) # DEBUG
-                    obj = res[0]; event = res[1] # can't use deconstruction because length of res can vary throughout implementations
+    def server_onestep(self, timeout=None):
+        """Do one round of servery stuff. If timeout=None poll in blocking
+           (regular) mode. If timeout=0 poll non-blocking (do not wait
+           until there is some event to act upon, only act if there is
+           one). If timeout > 0 this function can timeout, and return
+           without having done any action.
 
-                    if id(obj) == id(s):
-                        if event == select.POLLIN:
-                            cl, addr = s.accept()
-                            cl.setblocking(0)
-                            print('{}: client connected from {}'.format(self.__qualname__, addr))
-                            poll.register(cl, READ_ONLY)
-                            clientset.append(cl)
-                        else:
-                            raise Exception("Unhandled poll combo: {} {}".format(obj, event))
-                    else:
-                        cl = obj
-                        try:
-                            ret = self.__client(cl, event)
-                        except OSError as e:
-                            # TODO: Do we need to handle errno.ECONNRESET specially?
-                            # TODO: seems like we might need to handle NameError? (or is my code just buggy?)
-                            print("ERROR: Got", e)
-                            sys.print_exception(e)
+        """
 
-                        if ret == False:
-                            print("{}: client {} disconnected".format(self.__qualname__, addr)) # DEBUG (remove later)
-                            poll.unregister(cl)
-                            clientset.remove(cl)
-                            cl.close()
-        finally:
-            for cl in clientset:
-                cl.close()
-            s.close()
+        for res in self.poll.poll(timeout):
+            print("{}: poll: '{}'".format(self.__qualname__, res)) # DEBUG
+            obj = res[0]; event = res[1] # can't use deconstruction because length of res can vary throughout implementations
+
+            if id(obj) == id(self.s):
+                if event == select.POLLIN:
+                    cl, addr = self.s.accept()
+                    cl.setblocking(0)
+                    print('{}: client connected from {}'.format(self.__qualname__, addr))
+                    self.poll.register(cl, READ_ONLY)
+                    self.clientset.append(cl)
+                else:
+                    raise Exception("Unhandled poll combo: {} {}".format(obj, event))
+            else:
+                cl = obj
+                try:
+                    ret = self.__client(cl, event)
+                    if ret == False:
+                        print("{}: client {} disconnected".format(self.__qualname__, cl)) # DEBUG (remove later)
+                        self.poll.unregister(cl)
+                        self.clientset.remove(cl)
+                        cl.close()
+                except OSError as e:
+                    # TODO: Do we need to handle errno.ECONNRESET specially?
+                    # TODO: seems like we might need to handle NameError? (or is my code just buggy?)
+                    print("ERROR: Got", e)
+                    sys.print_exception(e)
+
+    def server_deinit(self):
+        """Tie up any loose ends and close the server socket."""
+        for cl in self.clientset:
+            cl.close()
+        self.s.close()
+        self.clientset = None
+        self.s = None
+        self.poll = None
 
     def __client(self, cl, event):
         """Handles a single message from a client. Returns False for client
@@ -210,29 +238,49 @@ class UDPVolumeServer(VolumeServer):
     confirmation is returned for normal commands.
 
     """
-    def __init__(self):
+    def __init__(self, port, bindaddr="0.0.0.0"):
         super().__init__()
+        self.port = port
+        self.bindaddr = bindaddr
 
-    def server_loop(self, port, bindaddr="0.0.0.0"):
+    def server_init(self):
         # TODO: Implement me
+        pass
+
+    def server_onestep(self):
+        pass
+
+    def server_deinit(self):
         pass
 
 
 class HTTPVolumeServer(VolumeServer):
     """ Why not? """
 
-    def __init__(self):
+    def __init__(self, port=8080, bindaddr="0.0.0.0"):
         super().__init__()
+        self.port = port
+        self.bindaddr = bindaddr
 
-    def server_loop(self, port=8080, bindaddr="0.0.0.0"):
+    def server_init(self):
         # TODO: implement
+        pass
+
+    def server_onstep(self):
+        pass
+
+    def server_deinit(self):
         pass
 
 
 def start_tcpserver(port=1128):
-    server = TCPVolumeServer()
-    return server.server_loop(port=port)
+    server = TCPVolumeServer(port=port)
+    return server.server_loop()
 
 def start_udpserver(port=1182):
-    server = UDPVolumeServer()
-    return server.server_loop(port=port)
+    server = UDPVolumeServer(port=port)
+    return server.server_loop()
+
+def start_httpserver(port=8080):
+    server = HTTPVolumeServer(port=port)
+    return server.server_loop()
