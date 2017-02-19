@@ -75,23 +75,37 @@ class VolumeServer(object):
         self._dispatch_table[cmd](self, *args)
 
 
-    def server_init(self):
+    def server_init(self, timeout=None):
+        """Init the server.
+
+        If timeout=None server_onestep will poll in blocking (regular)
+        mode. If timeout=0 server_onestep will poll non-blocking (do
+        not wait until there is some event to act upon, only act if
+        there is one). If timeout > 0 server_onestep can timeout, and
+        return without having taken any action.
+
+        """
+        # This function is meant to be overriden in subclasses
         pass
 
-    def server_onestep(self, timeout=None):
+    def server_onestep(self):
+        """Do one round of servery stuff (loop body). """
+        # This function is meant to be overriden in subclasses
         pass
 
     def server_deinit(self):
+        """Tie up any loose ends and close the server socket."""
+        # This function is meant to be overriden in subclasses
         pass
 
     def server_loop(self):
         """Run a foreground, blocking, server loop"""
 
-        self.server_init()
+        self.server_init(timeout=None)
 
         try:
             while True:
-                self.server_onestep(timeout=None)
+                self.server_onestep()
         finally:
             self.server_deinit()
 
@@ -111,19 +125,25 @@ class TCPVolumeServer(VolumeServer):
 
     """
 
-    def __init__(self, port, bindaddr="0.0.0.0"):
-        """Create a TCPVolumeServer bound to port and bindaddr"""
+    def __init__(self, port, bindaddr="0.0.0.0", client_timeout=5.0):
+        """Create a TCPVolumeServer bound to port and bindaddr. client_timeout
+           is the amount of seconds to wait in client connections
+           before we deem the connection dead. Since client
+           communication is blocking (but listening for connecting
+           clients isn't) this needs to be a non-zero floating point
+           value, so that the server loop cannot be stalled by an
+           unresponsive client.
+        """
         super().__init__()
         self.port = port
         self.bindaddr = bindaddr
+        self.client_timeout = client_timeout
 
-    def server_init(self):
-        """Start listening on volume control commands.
-        """
-
+    def server_init(self, timeout=None):
+        self.timeout = timeout
         addr = socket.getaddrinfo(self.bindaddr, self.port)[0][-1]
         self.s = socket.socket()
-        self.s.setblocking(0)        # non-blocking because we use polling
+        self.s.setblocking(False)        # non-blocking because we use polling
 
         self.poll = select.poll()
         self.poll.register(self.s, READ_ONLY)
@@ -135,28 +155,17 @@ class TCPVolumeServer(VolumeServer):
         self.s.bind(addr)
         self.s.listen(5)
 
-        print("{}: listening on {}".format(self.__qualname__, addr))
+        print("{}: listening on {} (timeout={})".format(self.__qualname__, addr, self.timeout))
 
-    def server_onestep(self, timeout=None):
-        """Do one round of servery stuff. If timeout=None poll in blocking
-           (regular) mode. If timeout=0 poll non-blocking (do not wait
-           until there is some event to act upon, only act if there is
-           one). If timeout > 0 this function can timeout, and return
-           without having done any action.
-
-        """
-
-        for res in self.poll.poll(timeout):
-            print("{}: poll: '{}'".format(self.__qualname__, res)) # DEBUG
+    def server_onestep(self):
+        for res in self.poll.poll(self.timeout):
+            #print("{}: poll: '{}'".format(self.__qualname__, res)) # DEBUG
             obj = res[0]; event = res[1] # can't use deconstruction because length of res can vary throughout implementations
 
             if id(obj) == id(self.s):
                 if event == select.POLLIN:
                     cl, addr = self.s.accept()
-                    cl.setblocking(0)
-                    print('{}: client connected from {}'.format(self.__qualname__, addr))
-                    self.poll.register(cl, READ_ONLY)
-                    self.clientset.append(cl)
+                    self.__add_client(cl, addr)
                 else:
                     raise Exception("Unhandled poll combo: {} {}".format(obj, event))
             else:
@@ -165,28 +174,45 @@ class TCPVolumeServer(VolumeServer):
                     ret = self.__client(cl, event)
                     if ret == False:
                         print("{}: client {} disconnected".format(self.__qualname__, cl)) # DEBUG (remove later)
-                        self.poll.unregister(cl)
-                        self.clientset.remove(cl)
-                        cl.close()
+                        self.__remove_client(cl)
                 except OSError as e:
                     # TODO: Do we need to handle errno.ECONNRESET specially?
                     # TODO: seems like we might need to handle NameError? (or is my code just buggy?)
-                    print("ERROR: Got", e)
-                    sys.print_exception(e)
+                    if e.errno == errno.ETIMEDOUT:
+                        print("ERROR: communication with client {} timed out. Killing client.".format(cl))
+                        sys.print_exception(e)
+                        self.__remove_client(cl)
+                    else:
+                        print("ERROR: Got", e)
+                        sys.print_exception(e)
 
     def server_deinit(self):
-        """Tie up any loose ends and close the server socket."""
         for cl in self.clientset:
             cl.close()
         self.s.close()
+
         self.clientset = None
         self.s = None
         self.poll = None
 
-    def __client(self, cl, event):
-        """Handles a single message from a client. Returns False for client
-           disconnection, True otherwise.
+    def __add_client(self, cl, addr):
+        """Handles accepting a new client"""
+        # TODO: store addr (associated with cl) for nicer debug printouts etc
+        cl.setblocking(True) # Needed for reliable writing?
+        cl.settimeout(self.client_timeout)
+        print('{}: client connected from {}'.format(self.__qualname__, addr))
+        self.poll.register(cl, READ_ONLY)
+        self.clientset.append(cl)
 
+    def __remove_client(self, cl):
+        """Handles when a client disconnects"""
+        self.poll.unregister(cl)
+        self.clientset.remove(cl)
+        cl.close()
+
+    def __client(self, cl, event):
+        """Handles a single message (receive, execute, reply) from a client.
+           Returns False for client disconnection, True otherwise.
         """
 
         # TODO: handle POLLERR?
@@ -207,7 +233,7 @@ class TCPVolumeServer(VolumeServer):
 
         if not line or line == '\r\n' or line == '\n':
             return False
-        if line[:6] == 'byebye': # TODO: us bytestring = memoryview
+        if line[:6] == 'byebye': # TODO: use bytestring + memoryview
             send_string("CYA")
             return False
 
@@ -223,7 +249,7 @@ class TCPVolumeServer(VolumeServer):
             send_error_msg("bad argument: " + str(e))
             sys.print_exception(e)
         else:
-            send_string("OK " + self.vc.get_status_string())
+            send_string("OK " + self.vc.get_status_string()) # TODO: inform all clients of the state change
 
         return True
 

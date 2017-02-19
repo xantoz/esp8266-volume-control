@@ -5,7 +5,7 @@ import utime as time
 #
 #  CS is pulled low and then two bytes (first the command byte then
 #  the data byte) are sent. Command is executed when CS is again
-#  pulled high
+#  pulled high.
 #
 #  The data byte is a regular 8 bit unsigned integer.
 #  Larger value  = PW (wiper) moves closer to PA,
