@@ -24,8 +24,8 @@ class VolumeServer(object):
     def _cmd_mutechan(self, chan, state):
         """Command to mute/unmute a single channel
            Usage: mute <chan> <0/1>"""
-        schan, lr = self.get_chan(chan)
-        self.set_mute(schan, lr, bool(int(state)))
+        schan, lr = self.vc.get_chan(chan)
+        self.vc.set_mute(schan, lr, bool(int(state)))
 
     def _cmd_inc(self, chan):
         schan, lr = self.vc.get_chan(chan)
