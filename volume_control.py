@@ -45,7 +45,7 @@ class VolumeController(object):
            MCP42XXX (which isn't used by this method).
 
         """
-        self.levels = [[0,0] for _ in range(self.NUMPOTS)]
+        self.levels = [[0,0] for _ in range(self.NUMPOTS)] # TODO: memset instead of realloc
         self.push_levels()
         self.unmute()
 
@@ -154,8 +154,9 @@ class VolumeController(object):
            Format: <pot nr>: (<left level>, <right level>, <left mute state>, <right mute state>); ...; Mute: <global mute state>
         """
         # TODO: Switch over to symbolic mapped names instead? (FL, FR, RR, RL, CEN, SUB etc.)
-        return "; ".join(["{}: ({},{},{},{})".format(i, schan[self.L], schan[self.R], int(smute[self.L]), int(smute[self.R]))
-                          for i, (schan, smute) in enumerate(zip(self.levels, self.mutes))]) \
+        # TODO: Build bytearray iteratively in loop instead (speed & memory usage improvement)?
+        return "; ".join(("{}: ({},{},{},{})".format(i, schan[self.L], schan[self.R], int(smute[self.L]), int(smute[self.R]))
+                          for i, (schan, smute) in enumerate(zip(self.levels, self.mutes)))) \
                     + "; Mute: {}".format(int(self.mute_state))
 
     _chan_table = {
