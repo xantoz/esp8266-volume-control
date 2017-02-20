@@ -221,8 +221,9 @@ class TCPVolumeServer(VolumeServer):
             return False
 
         def send_string(string):
-            cl.send(bytes(string, 'ascii'))
-            cl.send(b'\n')
+            val = bytearray(string)
+            val.extend(b'\n')
+            cl.write(val)
 
         def send_error_msg(msg):
             print("ERROR:",msg)
