@@ -255,13 +255,13 @@ class TCPVolumeServer(VolumeServer):
 
 
 class UDPVolumeServer(VolumeServer):
-    """UDPVolumeServer implements a connectionless server protocol with
-    textual commands with one command per datagram.
+    """UDPVolumeServer implements a connectionless server protocol of
+    textual commands with one command sent per datagram.
 
     Unique features: Will only reply with the state of the
     VolumeController when requested, in comparison with the TCP
-    protocol. Clients will have to poll the server for its state. No
-    confirmation is returned for normal commands.
+    protocol. Clients will have to poll the server for its state to
+    keep up to date. No confirmation is returned for normal commands.
 
     """
     def __init__(self, port, bindaddr="0.0.0.0"):
@@ -269,15 +269,48 @@ class UDPVolumeServer(VolumeServer):
         self.port = port
         self.bindaddr = bindaddr
 
-    def server_init(self):
-        # TODO: Implement me
-        pass
+    def server_init(self, timeout=None):
+        """Init the server."""
+
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        addr = socket.getaddrinfo(self.bindaddr, self.port)[0][-1]
+        self.s.bind(addr)
+        self.s.settimeout(timeout) # set blocking/timeout mode
+
+        print("{}: bound UDP socket to {}".format(self.__qualname__, addr)) # DEBUG
 
     def server_onestep(self):
-        pass
+        data, addr = self.s.recvfrom(256)
+        print("{}: received {} from {}".format(self.__qualname__, repr(data), addr))
+
+        def send_string(string):
+            self.s.sendto(bytes(string, 'ascii'), addr)
+
+        def send_error_msg(msg):
+            print("ERROR:",msg)
+            send_string("ERROR " + msg)
+
+        # Notably the UDP protocol only replies if a command fails
+        # (useful when debugging a faulty client) or if a status
+        # message has been explicitly requested.
+
+        try:
+            self.process_cmd(data.decode('ascii'))
+        except TypeError as e:
+            send_error_msg("wrong amount of args")
+            sys.print_exception(e)
+        except KeyError as e:
+            send_error_msg("no such command")
+            sys.print_exception(e)
+        except ValueError as e:
+            send_error_msg("bad argument: " + str(e))
+            sys.print_exception(e)
+
+        if "status" in data:
+            send_string(self.vc.get_status_string())
 
     def server_deinit(self):
-        pass
+        self.s.close()
 
 
 class HTTPVolumeServer(VolumeServer):
@@ -288,11 +321,11 @@ class HTTPVolumeServer(VolumeServer):
         self.port = port
         self.bindaddr = bindaddr
 
-    def server_init(self):
+    def server_init(self, timeout=None):
         # TODO: implement
         pass
 
-    def server_onstep(self):
+    def server_onestep(self):
         pass
 
     def server_deinit(self):
