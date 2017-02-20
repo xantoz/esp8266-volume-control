@@ -61,14 +61,15 @@ class MCP42XXX(object):
 
         self.daisyCount = daisyCount
 
+    # TODO: use arrays instead of lists and/or be compatible with generators/iterators
     def set_chain(self, values, channels=None):
         """Set all units in daisy chain. First element in the lists
         values and channels corresponds to the first chip (sent last),
         second element to second etc.
 
-        Values in the list values should be between an integer between
-        0 and 255, the string 'shdn' or None. Values in the list
-        channels should be one of 0b01, 0b10, 0b11.
+        Values in the list values should be an integer between 0 and
+        255, the string 'shdn' or None. Values in the list channels
+        should be one of 0b01, 0b10, 0b11.
 
         None in values == send NOP to corresponding chip. 'shdn' in
         values sends shdn command to corresponding chip (position) and
