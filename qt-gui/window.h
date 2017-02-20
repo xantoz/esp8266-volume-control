@@ -17,8 +17,9 @@ public:
     virtual ~Window();
 
 public slots:
-    void error(const QString& _details);
-    void fatalError(const QString& _details);
+    void error(const QString &message);
+    void error(const QString &message, const QString &details);
+    void fatalError(const QString &details);
     /// \brief Disables volume sliders
     void sliderDisable();
     /// \brief Enables volume sliders

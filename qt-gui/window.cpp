@@ -115,19 +115,33 @@ Window::~Window()
     this->serverDisconnect();
 }
 
-void Window::error(const QString& _details)
+void Window::error(const QString& message)
 {
     QMessageBox mbox(
         QMessageBox::Critical,
         tr("Error"),
-        _details,
+        message,
         QMessageBox::Ok,
         this);
 
     mbox.exec();
 }
 
-void Window::fatalError(const QString& _details)
+void Window::error(const QString& message, const QString &details)
+{
+    QMessageBox mbox(
+        QMessageBox::Critical,
+        tr("Error"),
+        message,
+        QMessageBox::Ok,
+        this);
+
+    mbox.setDetailedText(details);
+    mbox.exec();
+}
+
+
+void Window::fatalError(const QString& details)
 {
     QMessageBox mbox(
         QMessageBox::Critical,
@@ -137,7 +151,7 @@ void Window::fatalError(const QString& _details)
         QMessageBox::Ok,
         this);
 
-    mbox.setDetailedText(_details);
+    mbox.setDetailedText(details);
     mbox.exec();
 
     // This might be called during the constructor (before qApp->exec) so defer quit call
@@ -206,8 +220,8 @@ void Window::readStatusMessage()
     if (0 == strncmp(status, "ERROR", 5))
     {
         // Parse ERROR message
-        QString msg = tr("Got error message from server: ");
-        msg.append(status);
+        QString msg = tr("Got error message from server:");
+        msg.append(status+4); // Since strncmp passed we know there's at least 5 chars in this string
         qDebug() << "ERROR: " << msg;
         error(msg);
         return;
@@ -238,7 +252,7 @@ void Window::parseStatusMessage(const char *status)
                      &global_mute))
     {
         qDebug() << "ERROR: Couldn't parse server message";
-        error(tr("Couldn't parse server message"));
+        error(tr("Couldn't parse server message"), QString(status).simplified());
         return;
     }
 
