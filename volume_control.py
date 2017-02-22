@@ -2,7 +2,12 @@ import sys
 import math
 import usocket as socket
 import uerrno as errno
-from mcp42xxx import MCP42XXX
+
+if sys.platform == 'linux':
+    # Use dummy MCP42XXX on fort testing on Linux
+    MCP42XXX = __import__('mcp42xxx_dummy').MCP42XXX
+else:
+    MCP42XXX = __import__('mcp42xxx').MCP42XXX
 
 # TODO: maybe move networking/protocol portion outside VolumeController class to its own class or module?
 

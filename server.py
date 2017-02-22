@@ -199,7 +199,10 @@ class TCPVolumeServer(VolumeServer):
         """Handles accepting a new client"""
         # TODO: store addr (associated with cl) for nicer debug printouts etc
         cl.setblocking(True) # Needed for reliable writing?
-        cl.settimeout(self.client_timeout)
+        if sys.platform != 'linux':
+            # linux port of micropython doesn't support settimeout,
+            # but we want to be able to run the server on linux when debugging
+            cl.settimeout(self.client_timeout)
         print('{}: client connected from {}'.format(self.__qualname__, addr))
         self.poll.register(cl, READ_ONLY)
         self.clientset.append(cl)
@@ -276,7 +279,10 @@ class UDPVolumeServer(VolumeServer):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         addr = socket.getaddrinfo(self.bindaddr, self.port)[0][-1]
         self.s.bind(addr)
-        self.s.settimeout(timeout) # set blocking/timeout mode
+        if sys.platform != 'linux':
+            # linux port of micropython doesn't support settimeout,
+            # but we want to be able to run the server on linux when debugging
+            self.s.settimeout(timeout) # set blocking/timeout mode
 
         print("{}: bound UDP socket to {}".format(self.__qualname__, addr)) # DEBUG
 
