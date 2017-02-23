@@ -190,7 +190,7 @@ void UdpProtocol::serverConnect(const QString &host, quint16 port)
         qDebug() << "UDP \"connection\" success";
         this->isConnected = true;
         emit connected();
-        this->waitingForAnswer = false;
+        this->waitingForAnswer = 0;
         this->statusUpdateTimer->start();
     }
     else
@@ -200,7 +200,7 @@ void UdpProtocol::serverConnect(const QString &host, quint16 port)
         this->host.clear();
         this->port = 0;
         this->statusUpdateTimer->stop();
-        this->waitingForAnswer = false;
+        this->waitingForAnswer = 0;
     }
 }
 
@@ -216,7 +216,7 @@ void UdpProtocol::serverDisconnect()
     this->port = 0;
     this->statusUpdateTimer->stop();
 
-    this->waitingForAnswer = false;
+    this->waitingForAnswer = 0;
     this->isConnected = false;
 
     emit disconnected();
