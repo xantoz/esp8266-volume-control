@@ -1,7 +1,9 @@
-// -*- Mode: C++/lah -*-
+// -*- Mode: C++ -*-
+
+#ifndef __WINDOW_H
+#define __WINDOW_H
 
 #include <QWidget>
-
 
 #include "VolumeSlider.h"
 #include "ConnectionBox.h"
@@ -39,3 +41,5 @@ private:
     LRVolumeSlider *censubSlider;
     LRVolumeSlider *rearSlider;
 };
+
+#endif

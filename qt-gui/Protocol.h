@@ -1,4 +1,7 @@
-// -*- Mode: C++/lah -*-
+// -*- Mode: C++ -*-
+
+#ifndef __PROTOCOL_H
+#define __PROTOCOL_H
 
 #include <QObject>
 #include <QTcpSocket>
@@ -123,3 +126,4 @@ private:
                                //!and this is larger than pingMissesBeforeDisconnect.
 };
 
+#endif

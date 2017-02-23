@@ -1,3 +1,8 @@
+// -*- Mode: C++ -*-
+
+#ifndef __CONNECTIONBOX_H
+#define __CONNECTIONBOX_H
+
 #include <QWidget>
 #include <QLineEdit>
 #include <QPushButton>
@@ -53,3 +58,5 @@ private:
     QPushButton *button;
     QMetaObject::Connection buttonConnection;
 };
+
+#endif

@@ -1,3 +1,8 @@
+// -*- Mode: C++ -*-
+
+#ifndef __VOLUMESLIDER_H
+#define __VOLUMESLIDER_H
+
 #include <QGroupBox>
 #include <QSlider>
 #include <QCheckBox>
@@ -89,3 +94,5 @@ private:
     QSlider *slider;
     QCheckBox *muteBox;
 };
+
+#endif
