@@ -14,5 +14,5 @@ QT += widgets
 QT += network
 
 # Input
-HEADERS = window.h VolumeSlider.h ConnectionBox.h
-SOURCES = main.cpp window.cpp VolumeSlider.cpp ConnectionBox.cpp
+HEADERS = window.h VolumeSlider.h ConnectionBox.h Protocol.h
+SOURCES = main.cpp window.cpp VolumeSlider.cpp ConnectionBox.cpp Protocol.cpp
