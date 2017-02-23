@@ -91,12 +91,14 @@ public:
     /**
      * Construct an UdpProtocol.
      *
-     * @param updateInterval How often we should ping the server for status updates. This also
-     * functions double as the time before we should consider ourselves disconnected (TODO: use
-     * multiples of this value before regarding as disconnect, i.e. allow a certain number of
-     * failed pings before disconnecting)
+     * @param updateInterval             How often we should ping the server for status updates.
+     *
+     * @param pingMissesBeforeDisconnect How many failed pings to allow before we consider the
+     *                                   server as gone, and us as disconnected from it. Thus
+     *                                   the timeout for our "connection" to the server is
+     *                                   updateInterval * pingMissesBeforeDisconnect ms
      */
-    UdpProtocol(int updateInterval = defaultUpdateInterval);
+    UdpProtocol(int updateInterval=1000, unsigned pingMissesBeforeDisconnect=30);
     
 public slots:
     void serverConnect(const QString &host, quint16 port) override;
@@ -109,16 +111,15 @@ private slots:
     void pingServer(); //!< Called by statusUpdateTimer
 
 private:
-    static const int defaultUpdateInterval = 500; // !< Update every 500 ms by default
-
     QHostAddress host;
     quint16 port;
+    bool isConnected;
     QUdpSocket *socket;
     QTimer *statusUpdateTimer; //!< Used to update status periodically
 
-    bool isConnected;
-    bool waitingForAnswer; //!< Set by pingServer and reset by receiveStatusMessage. Consider us
-                           //!as having lost connection with server if we end up in pingServer
-                           //!and this is still set.
+    const unsigned pingMissesBeforeDisconnect;
+    unsigned waitingForAnswer; //!< Incremented by pingServer and reset by receiveStatusMessage. Consider us
+                               //!as having lost connection with server if we end up in pingServer
+                               //!and this is larger than pingMissesBeforeDisconnect.
 };
 

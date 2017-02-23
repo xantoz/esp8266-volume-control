@@ -137,8 +137,9 @@ void TcpProtocol::receiveStatusMessage()
 
 
 //// UdpProtocol ////
-UdpProtocol::UdpProtocol(int updateInterval) :
-    host(QHostAddress::Null), port(0), isConnected(false), waitingForAnswer(false)
+UdpProtocol::UdpProtocol(int updateInterval, unsigned _pingMissesBeforeDisconnect) :
+    host(QHostAddress::Null), port(0), isConnected(false),
+    pingMissesBeforeDisconnect(_pingMissesBeforeDisconnect), waitingForAnswer(0)
 {
     socket = new QUdpSocket(this);
     socketSetup(socket);
@@ -225,10 +226,10 @@ void UdpProtocol::receiveStatusMessage()
 {
     while (socket->hasPendingDatagrams())
     {
-        waitingForAnswer = false;
+        waitingForAnswer = 0;
         char status[socket->pendingDatagramSize() + 1];
-        qint64 size = socket->readDatagram(status, sizeof(status) - 1);
-        status[sizeof(status) - 1] = '\0'; // NUL-terminate
+        qint64 size = socket->readDatagram(status, socket->pendingDatagramSize());
+        status[(size >= 0) ? size : 0] = '\0'; // NUL-terminate
         qDebug() << "Got status message (size: " << size << ")" << status;
 
         if (size == -1)
@@ -260,16 +261,16 @@ void UdpProtocol::sendMsg(const char *msg)
 
 void UdpProtocol::pingServer()
 {
-    if (waitingForAnswer)
+    if (waitingForAnswer > pingMissesBeforeDisconnect)
     {
         // If we've been waiting for an answer longer than the update interval consider us as
         // having lost connection with the server.
-        waitingForAnswer = false;
+        waitingForAnswer = 0;
         emit error(tr("Lost \"connection\" with server."));
         serverDisconnect();
         return;
     }
 
-    waitingForAnswer = true;
+    ++waitingForAnswer;
     this->sendMsg("status");
 }
