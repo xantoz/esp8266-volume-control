@@ -70,10 +70,11 @@ class VolumeServer(object):
                        'reset': _cmd_reset}
 
     def process_cmd(self, line):
-        banana = line.split()
-        cmd, args = banana[0], banana[1:]
-        self._dispatch_table[cmd](self, *args)
-
+        line = line.strip()
+        if line:
+            banana = line.split()
+            cmd, args = banana[0], banana[1:]
+            self._dispatch_table[cmd](self, *args)
 
     def server_init(self, timeout=None):
         """Init the server.
@@ -314,7 +315,7 @@ class UDPVolumeServer(VolumeServer):
             sys.print_exception(e)
 
         if "status" in data:
-            send_string(self.vc.get_status_string())
+            send_string("OK " + self.vc.get_status_string())
 
     def server_deinit(self):
         self.s.close()
