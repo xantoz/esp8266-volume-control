@@ -4,3 +4,5 @@ Makefile*
 esp8266-vc-qt-gui
 debug/
 release/
+.qmake*
+dconf
