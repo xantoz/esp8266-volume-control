@@ -21,6 +21,11 @@ class VolumeServer(object):
         schan, lr = self.vc.get_chan(chan)
         self.vc.set_volume(schan, lr, int(level))
 
+    def _cmd_setmaster(self, level):
+        """Command to set master level.
+           Usage: setmaster <0-99>"""
+        self.vc.set_master(int(level))
+
     def _cmd_mutechan(self, chan, state):
         """Command to mute/unmute a single channel
            Usage: mute <chan> <0/1>"""
@@ -62,6 +67,7 @@ class VolumeServer(object):
     # Used by _process_cmd
     # TODO: make it easier for subclasses to redefine this?
     _dispatch_table = {'set': _cmd_set,
+                       'setmaster': _cmd_setmaster,
                        'inc': _cmd_inc,
                        'dec': _cmd_dec,
                        'status': _cmd_status,

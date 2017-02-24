@@ -40,7 +40,8 @@ class VolumeController(object):
 
     def __init__(self):
         self.pot = MCP42XXX(baudrate=40000, daisyCount=self.NUMPOTS)
-        self.levels = [[0,0] for _ in range(self.NUMPOTS)] # TODO: initialize from value stored to flash (re-store periodically, or on request)
+        self.levels = [[0,0] for _ in range(self.NUMPOTS)] # TODO: initialize from values stored to flash (re-store periodically, or on request)
+        self.master = self.MAX_LEVEL
         self.mutes  = [[False,False] for _ in range(self.NUMPOTS)]
         self.push_levels()
         self.mute_state = False
@@ -51,6 +52,7 @@ class VolumeController(object):
 
         """
         self.levels = [[0,0] for _ in range(self.NUMPOTS)] # TODO: memset instead of realloc
+        self.master = self.MAX_LEVEL
         self.push_levels()
         self.unmute()
 
@@ -71,7 +73,8 @@ class VolumeController(object):
         # TODO: restructure self.levels and self.mutes in a way that requires less zipping here...
         for chan, values in zip([MCP42XXX.P0, MCP42XXX.P1], zip(zip(*self.levels), zip(*self.mutes))):
             # Since we always send everything we neatly avoid the glitch where a channel is unshdn:ed by even a regular NOP
-            self.pot.set_chain(['shdn' if mute else g_logarithmic_mapping[level] for level, mute in zip(*values)],
+            self.pot.set_chain(['shdn' if mute else g_logarithmic_mapping[level*self.master//self.MAX_LEVEL]
+                                for level, mute in zip(*values)],
                                [chan]*self.NUMPOTS)
 
     def set_volume(self, schannel, lr, level):
@@ -143,6 +146,15 @@ class VolumeController(object):
         else:
             return self.levels[schannel][lr]
 
+    def set_master(self, level):
+        """Set the master volume level (scales down the value sent to all other pots)."""
+        self.master = level
+        self.push_levels()
+
+    def get_master(self):
+        """Get the master volume level"""
+        return self.master
+
     def mute(self):
         """Set global mute state"""
         self.pot.shdn_all()     # Implemented by pulling SHDN pin low
@@ -156,13 +168,13 @@ class VolumeController(object):
     def get_status_string(self):
         """Returns a string describing the state of the volume controller.
            NOTE: This string is used directectly by VolumeServer, it thus forms part of the protocol.
-           Format: <pot nr>: (<left level>, <right level>, <left mute state>, <right mute state>); ...; Mute: <global mute state>
+           Format: <pot nr>: (<left level>, <right level>, <left mute state>, <right mute state>); ...; Master: <master level> Mute: <global mute state>
         """
         # TODO: Switch over to symbolic mapped names instead? (FL, FR, RR, RL, CEN, SUB etc.)
         # TODO: Build bytearray iteratively in loop instead (speed & memory usage improvement)?
         return "; ".join(("{}: ({},{},{},{})".format(i, schan[self.L], schan[self.R], int(smute[self.L]), int(smute[self.R]))
                           for i, (schan, smute) in enumerate(zip(self.levels, self.mutes)))) \
-                    + "; Mute: {}".format(int(self.mute_state))
+                    + "; Master: {} Mute: {}".format(self.master, int(self.mute_state))
 
     _chan_table = {
         'FL': (0, L), 'FR': (0, R), 'F': (0, LR),

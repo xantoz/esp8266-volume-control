@@ -18,7 +18,7 @@ Window::Window(Protocol *_protocol) :
     using namespace std::placeholders;
 
     masterSlider = new VolumeSlider("Master", this);
-    masterSlider->setValue(99);
+    masterSlider->setValue(VolumeSlider::maxVal);
     frontSlider  = new LRVolumeSlider("Front", this);
     censubSlider = new LRVolumeSlider("Center/Sub", this, "CEN", "SUB");
     rearSlider   = new LRVolumeSlider("Rear", this);
@@ -42,11 +42,6 @@ Window::Window(Protocol *_protocol) :
                          const char *lChan,
                          const char *rChan,
                          int lValue, int rValue) {
-        // Scale by master slider
-        int maValue = this->masterSlider->value();
-        lValue = (lValue * maValue) / VolumeSlider::maxVal;
-        rValue = (rValue * maValue) / VolumeSlider::maxVal;
-
         // Optimize when both channels same value
         if (lValue == rValue) {
             this->protocol->sendCmd("set", bothChan, lValue);
@@ -75,9 +70,7 @@ Window::Window(Protocol *_protocol) :
     connect(censubSlider, &LRVolumeSlider::muteStateChanged, std::bind(setMute, "CENSUB", "CEN", "SUB", _1, _2));
     connect(rearSlider,   &LRVolumeSlider::muteStateChanged, std::bind(setMute, "R",      "RL",  "RR",  _1, _2));
 
-    connect(masterSlider, &VolumeSlider::valueChanged, frontSlider,  &LRVolumeSlider::emitValueChanged);
-    connect(masterSlider, &VolumeSlider::valueChanged, censubSlider, &LRVolumeSlider::emitValueChanged);
-    connect(masterSlider, &VolumeSlider::valueChanged, rearSlider,   &LRVolumeSlider::emitValueChanged);
+    connect(masterSlider, &VolumeSlider::valueChanged, [this](int level) { this->protocol->sendCmd("setmaster", level); });
     connect(masterSlider, &VolumeSlider::muteStateChanged, [this](bool state) { this->protocol->sendCmd("mute", (int)state); });
 
     // Sliders disabled by default
@@ -185,7 +178,11 @@ void Window::sliderEnable()
 void Window::setSliders(const Protocol::ServerStatus &values)
 {
     // We're just adjusting our sliders to server reality, don't send any signals
-    QSignalBlocker frontBlock(frontSlider), censubBlock(censubSlider), rearBlock(rearSlider);
+    QSignalBlocker
+        frontBlock(frontSlider),
+        censubBlock(censubSlider),
+        rearBlock(rearSlider),
+        masterBlock(masterSlider);
 
     frontSlider->setValues(values.fl_level, values.fr_level);
     frontSlider->setMuteBoxes(values.fl_mute, values.fr_mute);
@@ -193,8 +190,6 @@ void Window::setSliders(const Protocol::ServerStatus &values)
     censubSlider->setMuteBoxes(values.cen_mute, values.sub_mute);
     rearSlider->setValues(values.rl_level, values.rr_level);
     rearSlider->setMuteBoxes(values.rl_mute, values.rr_mute);
-
-    // TODO?: Make master slider a server-side property (because we'll be able to read it back)
-    masterSlider->setValue(VolumeSlider::maxVal);
+    masterSlider->setValue(values.master);
     masterSlider->setMuteBox(values.global_mute);
 }

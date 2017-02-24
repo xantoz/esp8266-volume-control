@@ -40,11 +40,11 @@ void Protocol::parseStatusMessage(const char *status)
     // Note: This assumes L/R positions of CEN/SUB as L = SUB and R = CEN ...
     // TODO?: instead implement named properties server-side (python dict-like syntax?)
     ServerStatus values;                                    // TODO: handle both OK and no OK in beginning
-    if (13 != sscanf(status, "OK 0: ( %d , %d , %d , %d ) ; 1: ( %d , %d , %d , %d ) ; 2: ( %d , %d , %d , %d ) ; Mute: %d ",
+    if (14 != sscanf(status, "OK 0: ( %d , %d , %d , %d ) ; 1: ( %d , %d , %d , %d ) ; 2: ( %d , %d , %d , %d ) ; Master: %d Mute: %d ",
                      &values.fl_level, &values.fr_level, &values.fl_mute, &values.fr_mute,
                      &values.sub_level, &values.cen_level, &values.sub_mute, &values.cen_mute,
                      &values.rl_level, &values.rr_level, &values.rl_mute, &values.rr_mute,
-                     &values.global_mute))
+                     &values.master, &values.global_mute))
     {
         qDebug() << "ERROR: Couldn't parse server message";
         emit error(tr("Couldn't parse server message: ") + QString(status).simplified());

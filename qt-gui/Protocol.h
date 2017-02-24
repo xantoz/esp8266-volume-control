@@ -20,7 +20,7 @@ public:
         int fl_level; int fr_level; int fl_mute; int fr_mute;
         int sub_level; int cen_level; int sub_mute; int cen_mute;
         int rl_level; int rr_level; int rl_mute; int rr_mute;
-        int global_mute;
+        int master; int global_mute;
     };
 
     /**
