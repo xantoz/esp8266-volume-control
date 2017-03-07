@@ -12,8 +12,8 @@ class VolumeServer(object):
        commands used in the protocol.
     """
 
-    def __init__(self):
-        self.vc = VolumeController()
+    def __init__(self, vc=None):
+        self.vc = vc or VolumeController()
 
     def _cmd_set(self, chan, level):
         """Command to set a channel.
@@ -32,17 +32,16 @@ class VolumeServer(object):
         schan, lr = self.vc.get_chan(chan)
         self.vc.set_mute(schan, lr, bool(int(state)))
 
-    def _cmd_inc(self, chan):
+    def _cmd_inc(self, chan, step=1):
         schan, lr = self.vc.get_chan(chan)
         level = self.vc.get_volume(schan, lr)
         if level < self.vc.MAX_LEVEL:
-            self.vc.set_volume(schan, lr, level + 1)
+            self.vc.set_volume(schan, lr, level + int(step))
 
-    def _cmd_dec(self, chan):
-        schan, lr = self.vc.get_chan(chan)
-        level = self.vc.get_volume(schan, lr)
-        if level > self.vc.MIN_LEVEL:
-            self.vc.set_volume(schan, lr, level - 1)
+    def _cmd_incmaster(self, step=1):
+        level = self.vc.get_master()
+        if level < self.vc.MAX_LEVEL:
+            self.vc.set_master(level + int(step))
 
     def _cmd_mute(self, state):
         """Command to mute/unmute all channels.
@@ -69,7 +68,7 @@ class VolumeServer(object):
     _dispatch_table = {'set': _cmd_set,
                        'setmaster': _cmd_setmaster,
                        'inc': _cmd_inc,
-                       'dec': _cmd_dec,
+                       'incmaster': _cmd_incmaster,
                        'status': _cmd_status,
                        'mute': _cmd_mute,
                        'mutechan': _cmd_mutechan,
