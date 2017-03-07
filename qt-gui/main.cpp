@@ -25,11 +25,11 @@ int main(int argc, char **argv)
     // TODO: rewrite to use QCommandLineParser::addOptions instead
     QCommandLineOption useUdpOpt(
         QStringList({"u", "udp"}),
-        QApplication::translate("main", "Connect using UDP protocol (default)"));
+        QApplication::translate("main", "Connect using UDP protocol"));
     parser.addOption(useUdpOpt);
     QCommandLineOption useTcpOpt(
         QStringList({"t", "tcp"}),
-        QApplication::translate("main", "Connect using TCP protocol"));
+        QApplication::translate("main", "Connect using TCP protocol (default)"));
     parser.addOption(useTcpOpt);
     QCommandLineOption updateIntervalOpt(
         QStringList({"f", "update-interval"}),
@@ -54,7 +54,7 @@ int main(int argc, char **argv)
     else if (useUdp)
         protocol = new UdpProtocol(updateInterval);
     else
-        protocol = new UdpProtocol(updateInterval);
+        protocol = new TcpProtocol();
 
     bool portOk = true;
     Window *window;
