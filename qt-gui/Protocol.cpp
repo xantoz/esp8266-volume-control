@@ -254,8 +254,7 @@ void UdpProtocol::receiveStatusMessage()
 
 void UdpProtocol::sendMsg(const char *msg)
 {
-    // qDebug() << "UDP writeDatagram:" << msg;
-    // qDebug() << "Host: " << host << "Port:" << port;
+    qDebug() << "(" << host << port << ")" << "UDP writeDatagram:" << msg;
     socket->writeDatagram(msg, strlen(msg), host, port);
 }
 

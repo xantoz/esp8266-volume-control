@@ -101,7 +101,7 @@ public:
      *                                   the timeout for our "connection" to the server is
      *                                   updateInterval * pingMissesBeforeDisconnect ms
      */
-    UdpProtocol(int updateInterval=1000, unsigned pingMissesBeforeDisconnect=30);
+    UdpProtocol(int updateInterval=1000, unsigned pingMissesBeforeDisconnect=5);
     
 public slots:
     void serverConnect(const QString &host, quint16 port) override;
