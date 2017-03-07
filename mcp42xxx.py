@@ -83,6 +83,7 @@ class MCP42XXX(object):
             raise Exception("Wrong length for values/channels parameter")
 
         self.cs.low()           # enable CS
+        # TODO: build bytearray with all commands ahead of time (push things out faster through SPI at cost of some extra memory)
         for value, channel in zip(reversed(values), reversed(channels)):
             chan = (channel & 0b11)
             if value == 'shdn':

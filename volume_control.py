@@ -164,6 +164,12 @@ class VolumeController(object):
         """Unset global mute state"""
         self.pot.unshdn_all()
         self.mute_state = False
+        # when bringing SHDN pin high MCP42XXX will remove SHDN status
+        # from any pot that was put in this state through a command,
+        # thus we need to resend the volume controller state to the
+        # daisy chain so that individually muted channels won't be
+        # unmuted
+        self.push_levels()
 
     def get_status_string(self):
         """Returns a string describing the state of the volume controller.
