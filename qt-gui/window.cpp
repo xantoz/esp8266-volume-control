@@ -17,11 +17,11 @@ Window::Window(Protocol *_protocol) :
 {
     using namespace std::placeholders;
 
-    masterSlider = new VolumeSlider("Master", this);
+    masterSlider = new VolumeSlider(tr("Master"), this);
     masterSlider->setValue(VolumeSlider::maxVal);
-    frontSlider  = new LRVolumeSlider("Front", this);
-    censubSlider = new LRVolumeSlider("Center/Sub", this, "CEN", "SUB");
-    rearSlider   = new LRVolumeSlider("Rear", this);
+    frontSlider  = new LRVolumeSlider(tr("Front"), this);
+    censubSlider = new LRVolumeSlider(tr("Center/Sub"), this, "CEN", "SUB");
+    rearSlider   = new LRVolumeSlider(tr("Rear"), this);
 
     connectionBox = new ConnectionBox();
 
