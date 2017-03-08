@@ -14,7 +14,7 @@ void Protocol::socketSetup(QAbstractSocket *socket)
                 socket->abort();
                 emit error(errorString);
             });
-    connect(socket, &QTcpSocket::readyRead, this, &Protocol::receiveStatusMessage);
+    connect(socket, &QAbstractSocket::readyRead, this, &Protocol::receiveStatusMessage);
 }
 
 void Protocol::sendCmd(const char *cmd)
