@@ -38,8 +38,8 @@ class VolumeController(object):
 
     def __init__(self):
         self.pot = MCP42XXX(baudrate=40000, daisyCount=self.NUMPOTS)
-        self.levels = [[0,0] for _ in range(self.NUMPOTS)] # TODO: initialize from values stored to flash (re-store periodically, or on request)
-        self.master = self.MAX_LEVEL
+        self.levels = [[self.MAX_LEVEL,self.MAX_LEVEL] for _ in range(self.NUMPOTS)] # TODO: initialize from values stored to flash (re-store periodically, or on request)
+        self.master = self.MAX_LEVEL // 2
         self.mutes  = [[False,False] for _ in range(self.NUMPOTS)]
         self.push_levels()
         self.mute_state = False
