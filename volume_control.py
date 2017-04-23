@@ -4,12 +4,10 @@ import usocket as socket
 import uerrno as errno
 
 if sys.platform == 'linux':
-    # Use dummy MCP42XXX on fort testing on Linux
+    # Use dummy MCP42XXX for testing on Linux
     MCP42XXX = __import__('mcp42xxx_dummy').MCP42XXX
 else:
     MCP42XXX = __import__('mcp42xxx').MCP42XXX
-
-# TODO: maybe move networking/protocol portion outside VolumeController class to its own class or module?
 
 # A logarithmic mapping from 0 to 99 (volume levels) to 0 to 255
 # (values we send to the potentiometers). We need this because the

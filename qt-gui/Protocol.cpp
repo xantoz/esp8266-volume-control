@@ -92,7 +92,7 @@ void TcpProtocol::sendMsg(const char *msg)
     char data[256];
     snprintf(data, sizeof(data), "%s\n", msg);
     socket->write(data);
-    if (!socket->waitForBytesWritten(TIMEOUT))
+    if (!socket->waitForBytesWritten(TIMEOUT)) // TODO: Change to flush? Or otherwise make asynchronous
     {
         this->serverDisconnect();
         emit error(tr("Timed out sending command to server."));
@@ -104,6 +104,8 @@ void TcpProtocol::sendMsg(const char *msg)
 
 void TcpProtocol::receiveStatusMessage()
 {
+    // TODO: make this loop until we exhaust having stuff to read (see UdpProtocol)
+
     char status[512];
     qint64 lineLength = socket->readLine(status, sizeof(status));
     if (lineLength == -1)
@@ -115,17 +117,19 @@ void TcpProtocol::receiveStatusMessage()
 
     qDebug() << "Got status string:" << QString(status).simplified();
 
-    if (0 == strncmp(status, "ERROR", 5))
+    static const char errorString[] = "ERROR";
+    if (0 == strncmp(status, errorString, sizeof(errorString)-1))
     {
         // Parse ERROR message
         QString msg = tr("Got error message from server:");
-        msg.append(status+4); // Since strncmp passed we know there's at least 5 chars in this string
+        msg.append(status+sizeof(errorString)-2); // Since strncmp passed we know there's at least 5 chars in this string
         qDebug() << "ERROR: " << msg;
         emit error(msg);
         return;
     }
 
-    if (0 == strncmp(this->command, "status", 6))
+    static const char statusString[] = "status";
+    if (0 == strncmp(this->command, statusString, sizeof(statusString)-1))
     {
         // Parse and apply status message to sliders if we requested this status message
         // specifically using the status command
@@ -265,8 +269,8 @@ void UdpProtocol::pingServer()
         // If we've been waiting for an answer longer than the update interval consider us as
         // having lost connection with the server.
         waitingForAnswer = 0;
-        emit error(tr("Lost \"connection\" with server."));
         serverDisconnect();
+        emit error(tr("Lost \"connection\" with server."));
         return;
     }
 

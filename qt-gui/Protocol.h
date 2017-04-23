@@ -44,7 +44,6 @@ public:
      */
     virtual void sendMsg(const char *data) =0;
 
-
 public slots:
     virtual void serverConnect(const QString &host, quint16 port) =0;
     virtual void serverDisconnect() =0;
