@@ -71,7 +71,7 @@ class VolumeController(object):
         # TODO: restructure self.levels and self.mutes in a way that requires less zipping here...
         for chan, values in zip([MCP42XXX.P0, MCP42XXX.P1], zip(zip(*self.levels), zip(*self.mutes))):
             # Since we always send everything we neatly avoid the glitch where a channel is unshdn:ed by even a regular NOP
-            self.pot.set_chain(['shdn' if mute else g_logarithmic_mapping[level*self.master//self.MAX_LEVEL]
+            self.pot.set_chain(['shdn' if mute else (g_logarithmic_mapping[level]*g_logarithmic_mapping[self.master]//MCP42XXX.MAX_VALUE)
                                 for level, mute in zip(*values)],
                                [chan]*self.NUMPOTS)
 
