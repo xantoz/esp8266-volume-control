@@ -1,3 +1,6 @@
+# TODO: consider getting rid of consing when constructing strings, and deconstructing lists by using alterntive data types
+# TODO: consider binary protocol, at least for UDP (strings are annoying)
+
 import sys
 import usocket as socket
 import uerrno as errno
@@ -75,10 +78,13 @@ class VolumeServer(object):
                        'reset': _cmd_reset}
 
     def process_cmd(self, line):
-        line = line.strip()
+        """Process one command.
+        Arguments:
+          line (list of str): The command and, arguments, to process.
+
+        """
         if line:
-            banana = line.split()
-            cmd, args = banana[0], banana[1:]
+            cmd, args = line[0], line[1:] # TODO: this probably conses..., use alternative storage solution which uses references
             self._dispatch_table[cmd](self, *args)
 
     def server_init(self, timeout=None):
@@ -248,7 +254,7 @@ class TCPVolumeServer(VolumeServer):
             return False
 
         try:
-            self.process_cmd(line)
+            self.process_cmd(line.strip().split())
         except TypeError as e:
             send_error_msg("wrong amount of args")
             sys.print_exception(e)
@@ -271,7 +277,9 @@ class UDPVolumeServer(VolumeServer):
     Unique features: Will only reply with the state of the
     VolumeController when requested, in comparison with the TCP
     protocol. Clients will have to poll the server for its state to
-    keep up to date. No confirmation is returned for normal commands.
+    keep up to date. For normal commands only an ACK is returned
+    (echoing a sequence number/string supplied by the client), or an
+    error message in case of an error.
 
     """
     def __init__(self, port, bindaddr="0.0.0.0"):
@@ -303,24 +311,26 @@ class UDPVolumeServer(VolumeServer):
             print("ERROR:",msg)
             send_string("ERROR " + msg)
 
-        # Notably the UDP protocol only replies if a command fails
-        # (useful when debugging a faulty client) or if a status
-        # message has been explicitly requested.
+        msg = data.decode('ascii').strip().split()
+        seqnr, cmd = msg[0], msg[1:]
+        seqnrpart =  " #" + seqnr # Sequence numbers/strings are last and begin with '#'
 
         try:
-            self.process_cmd(data.decode('ascii'))
+            self.process_cmd(cmd)
         except TypeError as e:
-            send_error_msg("wrong amount of args")
+            send_error_msg("wrong amount of args" + seqnrpart)
             sys.print_exception(e)
         except KeyError as e:
-            send_error_msg("no such command")
+            send_error_msg("no such command" + seqnrpart)
             sys.print_exception(e)
         except ValueError as e:
-            send_error_msg("bad argument: " + str(e))
+            send_error_msg("bad argument: " + str(e) + seqnrpart)
             sys.print_exception(e)
 
         if "status" in data:
-            send_string("OK " + self.vc.get_status_string())
+            send_string("OK " + self.vc.get_status_string() + seqnrpart)
+        else:
+            send_string("ACK " + seqnrpart)
 
     def server_deinit(self):
         self.s.close()
