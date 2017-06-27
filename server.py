@@ -327,7 +327,7 @@ class UDPVolumeServer(VolumeServer):
             send_error_msg("bad argument: " + str(e) + seqnrpart)
             sys.print_exception(e)
 
-        if "status" in data:
+        if "status" == cmd[0]:
             send_string("OK " + self.vc.get_status_string() + seqnrpart)
         else:
             send_string("ACK " + seqnrpart)
