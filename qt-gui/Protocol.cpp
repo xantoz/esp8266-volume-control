@@ -307,18 +307,21 @@ void UdpProtocol::sendMsg(const char *msg)
     if (!isStatus)
     {
         // It should be fine to capture msgAry by value, as QByteArray:s are implicitly shared
-        std::function<void(void)> callback;
-        callback = std::move([this, seqNr, msgAry, callback, retries = 0u]() mutable {
+        std::function<void(void)> *callback = new std::function<void(void)>;
+        *callback = std::move([this, seqNr, msgAry, callback, retries = 0u]() mutable {
                 if (seqNr <= this->largestReceivedAck) {
                     qDebug() << "SUCCESS: Command found ACK nicely: " << QString::fromLatin1(msgAry.data());
+                    delete callback;
                     return;
                 }
                 if (seqNr < this->largestSentAck) {
                     qDebug() << "Not retrying because newer command sent: " << QString::fromLatin1(msgAry.data());
+                    delete callback;
                     return;
                 }
                 if (retries > this->pingMissesBeforeDisconnect) {
                     qDebug() << "WARNING: Reached maximum retries for command: " << QString::fromLatin1(msgAry.data());
+                    delete callback;
                     return;
                 }
 
@@ -326,7 +329,7 @@ void UdpProtocol::sendMsg(const char *msg)
                 ++retries;
                 qDebug() << "RETRY (" << host << port << ")" << "UDP writeDatagram: " << QString::fromLatin1(msgAry.data());
                 socket->writeDatagram(msgAry, host, port);
-                QTimer::singleShot(this->retransmitDelay, Qt::PreciseTimer, this, callback);
+                QTimer::singleShot(this->retransmitDelay, Qt::PreciseTimer, this, *callback);
             });
 
         /* TODO?: Use a timer attached to the class which we stop and change the callback to
@@ -334,7 +337,7 @@ void UdpProtocol::sendMsg(const char *msg)
            do-nothings. OTOH this way is easier converted to retransmitting always + in
            order semantics if we decide we want to replicate more of TCP in UDP (yey) in
            the future. */
-        QTimer::singleShot(this->retransmitDelay, Qt::PreciseTimer, this, callback);
+        QTimer::singleShot(this->retransmitDelay, Qt::PreciseTimer, this, *callback);
     }
 
     qDebug() << "(" << host << port << ")" << "UDP writeDatagram: " << QString::fromLatin1(msgAry.data());
