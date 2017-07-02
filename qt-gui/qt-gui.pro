@@ -7,7 +7,7 @@ TARGET = esp8266-vc-qt-gui
 INCLUDEPATH += .
 
 CONFIG += debug_and_release
-CONFIG += c++11
+CONFIG += c++14
 
 QT += core
 QT += widgets

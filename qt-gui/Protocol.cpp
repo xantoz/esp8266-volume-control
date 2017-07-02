@@ -3,6 +3,10 @@
 #include <QHostInfo>
 #include <memory>
 
+#include <iostream>
+#include <sstream>
+#include <algorithm>
+
 static const unsigned TIMEOUT = 10000;
 
 void Protocol::socketSetup(QAbstractSocket *socket)
@@ -19,7 +23,7 @@ void Protocol::socketSetup(QAbstractSocket *socket)
 
 void Protocol::sendCmd(const char *cmd)
 {
-    snprintf(command, sizeof(command), "%s", cmd);          // Need to copy because of logic in TcpProtcol::recieveSocket
+    snprintf(command, sizeof(command), "%s", cmd);          // Need to copy because of logic in TcpProtcol::recieveStatusMessage
     this->sendMsg(command);
 }
 
@@ -141,9 +145,13 @@ void TcpProtocol::receiveStatusMessage()
 
 
 //// UdpProtocol ////
-UdpProtocol::UdpProtocol(int updateInterval, unsigned _pingMissesBeforeDisconnect) :
+UdpProtocol::UdpProtocol(int updateInterval,
+                         unsigned _pingMissesBeforeDisconnect,
+                         int _retransmitDelay) :
     host(QHostAddress::Null), port(0), isConnected(false),
-    pingMissesBeforeDisconnect(_pingMissesBeforeDisconnect), waitingForAnswer(0)
+    pingMissesBeforeDisconnect(_pingMissesBeforeDisconnect),
+    retransmitDelay(_retransmitDelay),
+    waitingForAnswer(0)
 {
     socket = new QUdpSocket(this);
     socketSetup(socket);
@@ -230,50 +238,121 @@ void UdpProtocol::receiveStatusMessage()
 {
     while (socket->hasPendingDatagrams())
     {
-        waitingForAnswer = 0;
-        char status[socket->pendingDatagramSize() + 1];
-        qint64 size = socket->readDatagram(status, socket->pendingDatagramSize());
-        status[(size >= 0) ? size : 0] = '\0'; // NUL-terminate
-        qDebug() << "Got status message (size: " << size << ")" << status;
-
-        if (size == -1)
+        char response[socket->pendingDatagramSize() + 1];
+        qint64 size = socket->readDatagram(response, socket->pendingDatagramSize());
+        if (size < 0)
         {
-            emit error(tr("Problem reading status message from server. Disconnecting."));
+            emit error(tr("Problem reading response from server. Disconnecting."));
             serverDisconnect();
+            return;
         }
-        else if (0 == strncmp(status, "ERROR", 5))
-        {
-            // Parse ERROR message
-            QString msg = tr("Got error message from server:");
-            msg.append(status+4); // Since strncmp passed we know there's at least 5 chars in this string
-            qDebug() << "ERROR: " << msg;
+        response[size] = '\0'; // NUL-terminate
+        qDebug() << "Got response (size: " << size << ")" << response;
+
+        if (0 == strncmp(response, "ERROR", 5))
+        { // Parse ERROR message
+            QString msg = tr("Got error message from server: ");
+            msg.append(response+5); // Since strncmp passed we know there's at least 5 chars
+            qDebug() << tr("ERROR: ") << msg;
             emit error(msg);
+        }
+        else if (0 == strncmp(response, "ACK", 3))
+        { // ACK
+            quint64 ack;
+            std::istringstream stream(response+3);
+            stream >> ack;
+            this->largestReceivedAck = std::max(ack, this->largestReceivedAck);
+        }
+        else if (0 == strncmp(response, "OK", 2))
+        { // Status message starts with OK (response to status command)
+            this->waitingForAnswer = 0;
+            // TODO: check the sequence number, and ignore responses from too old status
+            // messages (to avoid problems if they arrive here out of order)
+            parseStatusMessage(response);
         }
         else
         {
-            parseStatusMessage(status);
+            QString msg = tr("Unknown response from server: ");
+            msg.append(response);
+            qDebug() << tr("ERROR: ") << msg;
+            emit error(msg);
         }
     }
 }
 
 void UdpProtocol::sendMsg(const char *msg)
 {
-    qDebug() << "(" << host << port << ")" << "UDP writeDatagram:" << msg;
-    socket->writeDatagram(msg, strlen(msg), host, port);
+    static const char *STATUS = "status";
+    bool isStatus = (0 == strncmp(msg, STATUS, strlen(STATUS)));
+
+    QByteArray msgAry(msg, strlen(msg));
+    quint64 seqNr;
+
+    if (isStatus)
+    {
+        // We use a separate group of sequence numbers for status commands, and we do not
+        // attempt to do any retransmissions in case of missed responses.
+        seqNr = ++this->largestSentStatusSeqNr;
+    }
+    else
+    {
+        // Other commands use the regular sequence numbers. We will try to retransmit the latest
+        // sent command on timeout.
+        seqNr = ++this->largestSentAck;
+    }
+
+    // prepend sequence number to command
+    msgAry.prepend((QString::number(seqNr) += ' ').toLatin1());
+
+    if (!isStatus)
+    {
+        // It should be fine to capture msgAry by value, as QByteArray:s are implicitly shared
+        std::function<void(void)> callback;
+        callback = [this, seqNr, msgAry, &callback, retries = 0u]() mutable {
+            if (seqNr <= this->largestReceivedAck) {
+                qDebug() << "SUCCESS: Command found ACK nicely: " << QString::fromLatin1(msgAry.data());
+                return;
+            }
+            if (seqNr < this->largestSentAck) {
+                qDebug() << "Not retrying because newer command sent: " << QString::fromLatin1(msgAry.data());
+                return;
+            }
+            if (retries > this->pingMissesBeforeDisconnect) {
+                qDebug() << "WARNING: Reached maximum retries for command: " << QString::fromLatin1(msgAry.data());
+                return;
+            }
+
+            // Retry
+            ++retries;
+            qDebug() << "RETRY (" << host << port << ")" << "UDP writeDatagram: " << QString::fromLatin1(msgAry.data());
+            socket->writeDatagram(msgAry, host, port);
+            QTimer::singleShot(this->retransmitDelay, Qt::PreciseTimer, this, callback);
+        };
+
+        /* TODO?: Use a timer attached to the class which we stop and change the callback to
+           instead. This way we avoid calling old callbacks which have been converted to
+           do-nothings. OTOH this way is easier converted to retransmitting always + in
+           order semantics if we decide we want to replicate more of TCP in UDP (yey) in
+           the future. */
+        QTimer::singleShot(this->retransmitDelay, Qt::PreciseTimer, this, callback);
+    }
+
+    qDebug() << "(" << host << port << ")" << "UDP writeDatagram: " << QString::fromLatin1(msgAry.data());
+    socket->writeDatagram(msgAry, host, port);
 }
 
 void UdpProtocol::pingServer()
 {
-    if (waitingForAnswer > pingMissesBeforeDisconnect)
+    if (this->waitingForAnswer > this->pingMissesBeforeDisconnect)
     {
         // If we've been waiting for an answer longer than the update interval consider us as
         // having lost connection with the server.
-        waitingForAnswer = 0;
-        serverDisconnect();
+        this->waitingForAnswer = 0;
+        this->serverDisconnect();
         emit error(tr("Lost \"connection\" with server."));
         return;
     }
 
-    ++waitingForAnswer;
+    ++this->waitingForAnswer;
     this->sendMsg("status");
 }
