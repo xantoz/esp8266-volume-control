@@ -299,58 +299,22 @@ void UdpProtocol::sendMsg(const char *msg)
         // Other commands use the regular sequence numbers. We will try to retransmit the latest
         // sent command on timeout.
         seqNr = ++this->largestSentAck;
+        QTimer::singleShot(this->retransmitDelay, Qt::PreciseTimer, this,
+                           [this, msg, seqNr] {
+                               if (seqNr <= this->largestReceivedAck) {
+                                   qDebug() << "SUCCESS: Command found ACK nicely: " << msg;
+                                   return;
+                               }
+                               if (seqNr < this->largestSentAck) {
+                                   qDebug() << "Not retrying because newer command sent: " << msg;
+                                   return;
+                               }
+                               this->sendMsg(msg);          // resend message
+                           });
     }
 
     // prepend sequence number to command
     msgAry.prepend((QString::number(seqNr) += ' ').toLatin1());
-
-    if (!isStatus)
-    {
-        // It should be fine to capture msgAry by value, as QByteArray:s are implicitly shared
-        struct callbackFunctor // TODO: inherit from QObject, get Qt automagic memory management?
-        {
-            UdpProtocol * const that;
-            const quint64 seqNr;
-            const QByteArray msgAry;
-            unsigned retries;
-
-            callbackFunctor(UdpProtocol * const _that, quint64 _seqNr, const QByteArray &_msgAry) :
-                that(_that), seqNr(_seqNr), msgAry(_msgAry), retries(0)
-            {}
-
-            void operator()(void)
-            {
-                if (seqNr <= that->largestReceivedAck) {
-                    qDebug() << "SUCCESS: Command found ACK nicely: " << QString::fromLatin1(msgAry.data());
-                    delete this;
-                    return;
-                }
-                if (seqNr < that->largestSentAck) {
-                    qDebug() << "Not retrying because newer command sent: " << QString::fromLatin1(msgAry.data());
-                    delete this;
-                    return;
-                }
-                if (retries > that->pingMissesBeforeDisconnect) {
-                    qDebug() << "WARNING: Reached maximum retries for command: " << QString::fromLatin1(msgAry.data());
-                    delete this;
-                    return;
-                }
-
-                // Retry
-                ++retries;
-                qDebug() <<  "RETRY (" << that->host << that->port << ")" << "UDP writeDatagram: " << QString::fromLatin1(msgAry.data());
-                that->socket->writeDatagram(msgAry, that->host, that->port);
-                QTimer::singleShot(that->retransmitDelay, Qt::PreciseTimer, that, *this);
-            }
-        } *callback = new callbackFunctor(this, seqNr, msgAry);
-
-        /* TODO?: Use a timer attached to the class which we stop and change the callback to
-           instead. This way we avoid calling old callbacks which have been converted to
-           do-nothings. OTOH this way is easier converted to retransmitting always + in
-           order semantics if we decide we want to replicate more of TCP in UDP (yey) in
-           the future. */
-        QTimer::singleShot(this->retransmitDelay, Qt::PreciseTimer, this, *callback);
-    }
 
     qDebug() << "(" << host << port << ")" << "UDP writeDatagram: " << QString::fromLatin1(msgAry.data());
     socket->writeDatagram(msgAry, host, port);
